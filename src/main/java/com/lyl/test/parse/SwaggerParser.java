@@ -4,7 +4,6 @@ import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.parser.core.models.AuthorizationValue;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
-import org.openapitools.codegen.auth.AuthParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -19,7 +19,7 @@ import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 
 public class AuthParser {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(org.openapitools.codegen.auth.AuthParser.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthParser.class);
 
     public static List<AuthorizationValue> parse(String urlEncodedAuthStr) {
         List<AuthorizationValue> auths = new ArrayList<AuthorizationValue>();

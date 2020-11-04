@@ -1,6 +1,7 @@
 package com.lyl.test;
 
-import org.openapitools.codegen.OpenAPIGenerator;
+
+import com.lyl.test.generate.MyDefaultGenerator;
 
 /**
  * @author yunlong.liu
@@ -13,7 +14,12 @@ public class Main {
 
         // generate -i swagger.json -g jmeter
 
-
+        MyDefaultGenerator myDefaultGenerator=new MyDefaultGenerator();
+        try {
+            myDefaultGenerator.generate("D:\\jmeter\\api-docs.json");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
     }
 }

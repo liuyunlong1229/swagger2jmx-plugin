@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.example</groupId>
-    <artifactId>demo</artifactId>
+    <artifactId>swagger2jmx-plugin</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
@@ -30,6 +30,11 @@
             <version>${swagger-parser-version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.freemarker</groupId>
+            <artifactId>freemarker</artifactId>
+            <version>2.3.23</version>
+        </dependency>
 
     </dependencies>
 

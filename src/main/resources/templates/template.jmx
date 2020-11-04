@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.1.1 r1855137">
   <hashTree>
-    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="{{服务名称}}" enabled="true">
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="${serviceName}" enabled="true">
       <stringProp name="TestPlan.comments"></stringProp>
       <boolProp name="TestPlan.functional_mode">false</boolProp>
       <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
@@ -62,7 +62,7 @@
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
             <collectionProp name="Arguments.arguments"/>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${host}</stringProp>
+          <stringProp name="HTTPSampler.domain">${host!}</stringProp>
           <stringProp name="HTTPSampler.port"></stringProp>
           <stringProp name="HTTPSampler.protocol"></stringProp>
           <stringProp name="HTTPSampler.contentEncoding"></stringProp>
@@ -95,26 +95,30 @@
 
        <!--自定义控制器，每个服务一个-->
        <hashTree>
-         <GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="msdevice" enabled="true">
+         <GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="${serviceName}" enabled="true">
             <!--需要循环遍历controller，每个controller生成一个控制器-->
+
+            <#list tagList as tag>
             <hashTree>
-            <GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="msdevice" enabled="true">
+            <GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="${tag.name}" enabled="true">
                 <stringProp name="TestPlan.comments">device-account-controller</stringProp>
                 <!--遍历controller的每个接口-->
+
+                <#list tag.requestNodes as req>
                 <!--生成request开始-->
                 <hashTree>
-                     <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="{{接口操作名称}}" enabled="true">
+                     <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="" enabled="true">
                           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
                              <collectionProp name="Arguments.arguments">
-                             {{#queryParams}}
-                              <elementProp name="{{paramName}}" elementType="HTTPArgument">
-                                <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                                {{=<% %>=}}<stringProp name="Argument.value">${<% paramName %>}</stringProp><%={{ }}=%>
-                                <stringProp name="Argument.metadata">=</stringProp>
-                                <boolProp name="HTTPArgument.use_equals">true</boolProp>
-                                <stringProp name="Argument.name">{{paramName}}</stringProp>
-                              </elementProp>
-                              {{/queryParams}}
+                                <#list req.paramNodes as param>
+                                <elementProp name="${paramName}" elementType="HTTPArgument">
+                                    <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                                    <stringProp name="Argument.value">${param.paramValue}</stringProp>
+                                    <stringProp name="Argument.metadata">=</stringProp>
+                                    <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                                    <stringProp name="Argument.name">${param.paramName}</stringProp>
+                                 </elementProp>
+                                </#list>
                             </collectionProp>
                           </elementProp>
                           <stringProp name="HTTPSampler.domain"></stringProp>
@@ -123,8 +127,8 @@
                           <stringProp name="HTTPSampler.response_timeout"></stringProp>
                           <stringProp name="HTTPSampler.protocol"></stringProp>
                           <stringProp name="HTTPSampler.contentEncoding"></stringProp>
-                          <stringProp name="HTTPSampler.path">{{basePathWithoutHost}}{{vendorExtensions.x-path}}</stringProp>
-                          <stringProp name="HTTPSampler.method">{{httpMethod}}</stringProp>
+                          <stringProp name="HTTPSampler.path">${req.requestUrl}</stringProp>
+                          <stringProp name="HTTPSampler.method">${req.httpMethod}</stringProp>
                           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
                           <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
                           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
@@ -132,7 +136,7 @@
                           <stringProp name="HTTPSampler.implementation"></stringProp>
                           <boolProp name="HTTPSampler.monitor">false</boolProp>
                           <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
-                          <stringProp name="TestPlan.comments">{{summary}} {{notes}}</stringProp>
+                          <stringProp name="TestPlan.comments">${req.oprationName}</stringProp>
                       </HTTPSamplerProxy>
                       <hashTree>
                         <!--每个接口断言定义开始-->
@@ -147,8 +151,10 @@
                       </hashTree>
                     <!--生成request结束-->
                 </hashTree>
+               </#list>
              </GenericController>
             </hashTree>
+           </#list>
          </GenericController>
        </hashTree>
 
