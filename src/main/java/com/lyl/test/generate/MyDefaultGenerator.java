@@ -17,13 +17,13 @@
 
 package com.lyl.test.generate;
 
+import com.google.common.collect.ImmutableMap;
 import com.lyl.test.element.ParamNode;
 import com.lyl.test.element.RequestNode;
 import com.lyl.test.element.TagNode;
 import com.lyl.test.element.TemplateParamVO;
 import com.lyl.test.parse.SwaggerParser;
 import com.lyl.test.utils.ModelUtils;
-import freemarker.cache.TemplateLoader;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -31,6 +31,8 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.*;
+import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.oas.models.servers.ServerVariables;
 import io.swagger.v3.oas.models.tags.Tag;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import org.apache.commons.lang3.StringUtils;
@@ -38,6 +40,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.*;
 
 
@@ -49,22 +53,21 @@ public class MyDefaultGenerator {
     private OpenAPI openAPI;
 
 
-    public void generate(String location) throws Exception {
-        SwaggerParseResult swaggerParseResult = new SwaggerParser().readWithInfo(location, null);
+    public void generate(String swaggerSourceLocation,String outPutDir) throws Exception {
+        SwaggerParseResult swaggerParseResult = new SwaggerParser().readWithInfo(swaggerSourceLocation, null);
         this.openAPI = swaggerParseResult.getOpenAPI();
         TemplateParamVO templateParamVO = prepareTemplateData();
-        paddingTemplate(templateParamVO);
+        paddingTemplate(templateParamVO,outPutDir);
 
 
     }
 
-    public void paddingTemplate(TemplateParamVO templateParamVO) throws Exception {
-
+    public void paddingTemplate(TemplateParamVO templateParamVO,String outPutDir) throws Exception {
         Configuration configuration = new Configuration(Configuration.getVersion());
         configuration.setClassForTemplateLoading(this.getClass(), "/templates");
         configuration.setDefaultEncoding("utf-8");
         Template template = configuration.getTemplate("template.jmx");
-        Writer out = new FileWriter(new File("D:/auto_test.jmx"));
+        Writer out = new FileWriter(new File(outPutDir+"/auto_test.jmx"));
         template.process(templateParamVO, out);
         out.close();
     }
@@ -89,13 +92,13 @@ public class MyDefaultGenerator {
 
 
         Map<String, TagNode> tagNodeMap = groupTagWithName();
-        Iterator var3 = openAPI.getPaths().keySet().iterator();
+        Iterator pathIterator = openAPI.getPaths().keySet().iterator();
 
-        while (var3.hasNext()) {
+        while (pathIterator.hasNext()) {
 
-            String resourcePath = (String) var3.next();
+            String resourcePath = (String) pathIterator.next();
             PathItem path = (PathItem) openAPI.getPaths().get(resourcePath);
-            RequestNode requestNode = bulid(resourcePath, path);
+            RequestNode requestNode = build(resourcePath, path);
             Iterator<String> it = requestNode.getTag().iterator();
             while (it.hasNext()) {
                 String tagName = it.next();
@@ -107,7 +110,23 @@ public class MyDefaultGenerator {
         }
 
         TemplateParamVO templateParamVO = new TemplateParamVO();
-        templateParamVO.setServiceName(openAPI.getInfo().getTitle());
+        templateParamVO.setTitle(StringUtils.isBlank(openAPI.getInfo().getTitle())?"测试计划":openAPI.getInfo().getTitle());
+        templateParamVO.setDescription(openAPI.getInfo().getDescription());
+
+        String host= "localhost";
+        int port=8080;
+        if(openAPI.getServers().size()> 0){
+            Server server=openAPI.getServers().get(0);
+            URL serverURL= getServerURL(server);
+            if(serverURL != null) {
+                host = serverURL.getHost();
+                port = serverURL.getPort();
+            }
+        }
+
+        templateParamVO.setHost(host);
+        templateParamVO.setPort(port);
+
         for (Map.Entry<String, TagNode> tagNodeEntry : tagNodeMap.entrySet()) {
             if (tagNodeEntry.getValue().getRequestNodes().isEmpty()) {
                 continue;
@@ -119,12 +138,43 @@ public class MyDefaultGenerator {
     }
 
 
-    private RequestNode bulid(String resourcePath, PathItem path) {
+
+
+    public  URL getServerURL(Server server) {
+        String url = server.getUrl();
+        if (StringUtils.isNotBlank(url)) {
+            url = sanitizeUrl(url);
+
+            try {
+                return new URL(url);
+            } catch (MalformedURLException var6) {
+                LOGGER.warn("Not valid URL: {}. Default to {}.", server.getUrl(), "http://localhost");
+            }
+        }
+        LOGGER.warn("Not Server URL: {}. Default to {}.", server.getUrl(), "http://localhost");
+        return null;
+    }
+    private  String sanitizeUrl(String url) {
+        if (url != null) {
+            if (url.startsWith("//")) {
+                url = "http:" + url;
+            } else if (url.startsWith("/")) {
+                url = "http://localhost" + url;
+            } else if (!url.matches("[a-zA-Z][0-9a-zA-Z.+\\-]+://.+")) {
+                url = "http://" + url;
+            }
+        }
+
+        return url;
+    }
+
+
+
+    private RequestNode build(String resourcePath, PathItem path) {
 
         RequestNode requestNode = new RequestNode();
         requestNode.setRequestUrl(resourcePath);
 
-        List<String> tags = new ArrayList<>();
         Operation operation = null;
 
         if (path.getGet() != null) {
@@ -133,8 +183,6 @@ public class MyDefaultGenerator {
         } else if (path.getPost() != null) {
             operation = path.getPost();
             requestNode.setHttpMethod(PathItem.HttpMethod.POST.name());
-            requestNode.setTag(path.getPost().getTags());
-            RequestBody requestBody = path.getPost().getRequestBody();
         } else if (path.getDelete() != null) {
             operation = path.getDelete();
             requestNode.setHttpMethod(PathItem.HttpMethod.DELETE.name());
@@ -147,14 +195,14 @@ public class MyDefaultGenerator {
         }
 
         requestNode.setTag(operation.getTags());
-        requestNode.setOprationName(StringUtils.isBlank(operation.getSummary()) ? operation.getOperationId() : operation.getSummary());
+        requestNode.setOperationName(StringUtils.isBlank(operation.getSummary()) ? operation.getOperationId() : operation.getSummary());
 
 
         List<ParamNode> queryParamNodes = new ArrayList<>();
         List<ParamNode> headerParamNodes = new ArrayList<>();
 
-        List<Parameter> parameterList = operation.getParameters();
 
+        boolean requestBodyIsEmpty=true;
 
         if (operation.getRequestBody() != null) {
 
@@ -171,32 +219,52 @@ public class MyDefaultGenerator {
                 if(exampleList.size()>0){
                     Map<String, String> element= exampleList.get(0);
                     String example=element.get("example");
-                    requestNode.setRequetsBody(example);
+                    requestNode.setRequestBody(example);
+                    requestBodyIsEmpty=false;
                     LOGGER.info("生成的body参数==>{}",example);
-                }
 
+                }
               }
 
             }
 
-            if (parameterList != null) {
+            StringBuilder queryString=new StringBuilder();
+            Boolean isFirstParam=true;
+            List<Parameter> parameterList = operation.getParameters();
+            if (parameterList != null && !parameterList.isEmpty()) {
                 for (Parameter param : parameterList) {
-
                     ParamNode paramNode = new ParamNode();
                     if ((param instanceof QueryParameter) || "query".equalsIgnoreCase(param.getIn())) {
-                        paramNode.setParamName(param.getName());
-                        queryParamNodes.add(paramNode);
+
+                        if(requestBodyIsEmpty){
+                            paramNode.setParamName(param.getName());
+                            queryParamNodes.add(paramNode);
+                        }else{
+                            if(isFirstParam){
+                                queryString= queryString.append("?");
+                                isFirstParam=false;
+                            }else {
+                                queryString= queryString.append("&");
+                            }
+                            queryString= queryString.append(param.getName()).append("=").append("${"+param.getName()+"}");
+                        }
+
                     } else if ((param instanceof PathParameter) || "path".equalsIgnoreCase(param.getIn())) {
                         //paramNode.setParamName(param.getName());
                         //queryParamNodes.add(paramNode);
                         //路径参数没法在jmeter里面设置参数列表
                     } else if ("body".equalsIgnoreCase(param.getIn())) {
-
+                        LOGGER.info("生成的body参数");
                     } else if ((param instanceof HeaderParameter) || "header".equalsIgnoreCase(param.getIn())) {
                         paramNode.setParamName(param.getName());
                         headerParamNodes.add(paramNode);
                     }
                 }
+
+                if(StringUtils.isNotBlank(queryString.toString())){
+                    requestNode.setRequestUrl(requestNode.getRequestUrl()+queryString);
+                }
+
                 requestNode.setQueryParamNodes(queryParamNodes);
                 requestNode.setHeaderParamNodes(headerParamNodes);
             }

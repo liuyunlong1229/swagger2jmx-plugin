@@ -10,18 +10,15 @@ import java.util.List;
 
 public class TemplateParamVO {
 
-    private String serviceName;
+    private String title;
+
+    private String description;
+
+   private String host;
+
+   private int port;
 
     private List<TagNode> tagList=new ArrayList<>();
-
-
-    public String getServiceName() {
-        return serviceName;
-    }
-
-    public void setServiceName(String serviceName) {
-        this.serviceName = serviceName;
-    }
 
     public List<TagNode> getTagList() {
         return tagList;
@@ -29,5 +26,39 @@ public class TemplateParamVO {
 
     public void setTagList(List<TagNode> tagList) {
         this.tagList = tagList;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+
+
+    public void setHost(String host) {
+        this.host = host;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
+    }
+
+    public String getHost() {
+        return host;
+    }
+
+    public int getPort() {
+        return port;
     }
 }

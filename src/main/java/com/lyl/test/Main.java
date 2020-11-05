@@ -16,7 +16,8 @@ public class Main {
 
         MyDefaultGenerator myDefaultGenerator=new MyDefaultGenerator();
         try {
-            myDefaultGenerator.generate("D:\\jmeter\\api-docs.json");
+          //  myDefaultGenerator.generate("D:\\jmeter\\api-docs.json");
+            myDefaultGenerator.generate("http://localhost:18084/v2/api-docs","D:/");
         } catch (Exception e) {
             e.printStackTrace();
         }

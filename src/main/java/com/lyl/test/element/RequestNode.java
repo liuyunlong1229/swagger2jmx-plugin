@@ -12,7 +12,7 @@ public class RequestNode {
 
     private List<String> tag;
 
-    private String oprationName;
+    private String operationName;
 
     private String  requestUrl;
 
@@ -20,17 +20,24 @@ public class RequestNode {
 
     private List<ParamNode> headerParamNodes=new ArrayList<>();
 
-    private String requetsBody =null;
+    private String requestBody =null;
 
     private String httpMethod;
 
-
-    public String getOprationName() {
-        return oprationName;
+    public String getOperationName() {
+        return operationName;
     }
 
-    public void setOprationName(String oprationName) {
-        this.oprationName = oprationName;
+    public void setOperationName(String operationName) {
+        this.operationName = operationName;
+    }
+
+    public String getRequestBody() {
+        return requestBody;
+    }
+
+    public void setRequestBody(String requestBody) {
+        this.requestBody = requestBody;
     }
 
     public String getRequestUrl() {
@@ -75,11 +82,4 @@ public class RequestNode {
         this.headerParamNodes = headerParamNodes;
     }
 
-    public String getRequetsBody() {
-        return requetsBody;
-    }
-
-    public void setRequetsBody(String requetsBody) {
-        this.requetsBody = requetsBody;
-    }
 }

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.1.1 r1855137">
   <hashTree>
-    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="${serviceName}" enabled="true">
-      <stringProp name="TestPlan.comments"></stringProp>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="${title}" enabled="true">
+      <stringProp name="TestPlan.comments">${description!}</stringProp>
       <boolProp name="TestPlan.functional_mode">false</boolProp>
       <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
       <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
@@ -34,9 +34,17 @@
 		  <collectionProp name="Arguments.arguments">
 			<elementProp name="host" elementType="Argument">
 			  <stringProp name="Argument.name">host</stringProp>
-			  <stringProp name="Argument.value">msdevice.perf.pateo.com.cn</stringProp>
 			  <stringProp name="Argument.metadata">=</stringProp>
+			  <stringProp name="Argument.value">${host!}</stringProp>
 			</elementProp>
+
+			<elementProp name="port" elementType="Argument">
+              <stringProp name="Argument.name">port</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              <stringProp name="Argument.value">${port?c}</stringProp>
+
+            </elementProp>
+
 		  </collectionProp>
 		</Arguments>
 		<hashTree/>
@@ -56,8 +64,8 @@
           <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
             <collectionProp name="Arguments.arguments"/>
           </elementProp>
-          <stringProp name="HTTPSampler.domain">${host!}</stringProp>
-          <stringProp name="HTTPSampler.port"></stringProp>
+          <stringProp name="HTTPSampler.domain">${r"${host}"}</stringProp>
+          <stringProp name="HTTPSampler.port">${r"${port}"}</stringProp>
           <stringProp name="HTTPSampler.protocol"></stringProp>
           <stringProp name="HTTPSampler.contentEncoding"></stringProp>
           <stringProp name="HTTPSampler.path"></stringProp>
@@ -75,17 +83,12 @@
               <stringProp name="Argument.value">LNBSCU4H8JS011386</stringProp>
               <stringProp name="Argument.metadata">=</stringProp>
             </elementProp>
-            <elementProp name="tboxPdsn" elementType="Argument">
-              <stringProp name="Argument.name">tboxPdsn</stringProp>
-              <stringProp name="Argument.value">2701979FE18103100033</stringProp>
-              <stringProp name="Argument.metadata">=</stringProp>
-            </elementProp>
           </collectionProp>
         </Arguments>
         <hashTree/>
 		
 		<!--服务逻辑控制器-->
-		<GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="${serviceName}" enabled="true" />
+		<GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="${title}" enabled="true" />
         <!--需要循环遍历controller，每个controller生成一个控制器-->
 		<hashTree>
 		<#list tagList as tag>
@@ -95,20 +98,33 @@
 		  <hashTree>
 		     <!--遍历请求接口-->
 			<#list tag.requestNodes as req>
-			<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="${req.oprationName}" enabled="true">
+			<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="${req.operationName}" enabled="true">
+			      <#if (req.requestBody)??>
+			      <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+                    <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+                      <collectionProp name="Arguments.arguments">
+                        <elementProp name="" elementType="HTTPArgument">
+                          <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                          <stringProp name="Argument.value">${req.requestBody!}</stringProp>
+                          <stringProp name="Argument.metadata">=</stringProp>
+                        </elementProp>
+                      </collectionProp>
+                    </elementProp>
+                 <#else>
 				  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
 					 <collectionProp name="Arguments.arguments">
 						<#list req.queryParamNodes as qp>
 						<elementProp name="${qp.paramName}" elementType="HTTPArgument">
 							<boolProp name="HTTPArgument.always_encode">false</boolProp>
-							<stringProp name="Argument.value">${qp.paramName}</stringProp>
 							<stringProp name="Argument.metadata">=</stringProp>
 							<boolProp name="HTTPArgument.use_equals">true</boolProp>
 							<stringProp name="Argument.name">${qp.paramName}</stringProp>
+							<stringProp name="Argument.value">${r"${"}${qp.paramName}${"}"}</stringProp>
 						 </elementProp>
 						</#list>
 					</collectionProp>
 				  </elementProp>
+                 </#if>
 				  <stringProp name="HTTPSampler.domain"></stringProp>
 				  <stringProp name="HTTPSampler.port"></stringProp>
 				  <stringProp name="HTTPSampler.connect_timeout"></stringProp>
@@ -124,7 +140,7 @@
 				  <stringProp name="HTTPSampler.implementation"></stringProp>
 				  <boolProp name="HTTPSampler.monitor">false</boolProp>
 				  <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
-				  <stringProp name="TestPlan.comments">${req.oprationName}</stringProp>
+				  <stringProp name="TestPlan.comments">${req.operationName}</stringProp>
 			  </HTTPSamplerProxy>
 			  <hashTree>
 			     <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="接口header管理器名称" enabled="true">
@@ -132,7 +148,7 @@
                       <#list req.headerParamNodes as hp>
                        <elementProp name="" elementType="Header">
                          <stringProp name="Header.name">${hp.paramName}</stringProp>
-                         <stringProp name="Header.value">${hp.paramName}</stringProp>
+                         <stringProp name="Header.value">${r"${"}${hp.paramName}${"}"}</stringProp>
                        </elementProp>
                        </#list>
                      </collectionProp>
