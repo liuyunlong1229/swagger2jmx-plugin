@@ -16,7 +16,11 @@ public class RequestNode {
 
     private String  requestUrl;
 
-    private List<ParamNode> paramNodes=new ArrayList<>();
+    private List<ParamNode> queryParamNodes=new ArrayList<>();
+
+    private List<ParamNode> headerParamNodes=new ArrayList<>();
+
+    private String requetsBody =null;
 
     private String httpMethod;
 
@@ -37,13 +41,7 @@ public class RequestNode {
         this.requestUrl = requestUrl;
     }
 
-    public List<ParamNode> getParamNodes() {
-        return paramNodes;
-    }
 
-    public void setParamNodes(List<ParamNode> paramNodes) {
-        this.paramNodes = paramNodes;
-    }
 
     public String getHttpMethod() {
         return httpMethod;
@@ -59,5 +57,29 @@ public class RequestNode {
 
     public void setTag(List<String> tag) {
         this.tag = tag;
+    }
+
+    public List<ParamNode> getQueryParamNodes() {
+        return queryParamNodes;
+    }
+
+    public void setQueryParamNodes(List<ParamNode> queryParamNodes) {
+        this.queryParamNodes = queryParamNodes;
+    }
+
+    public List<ParamNode> getHeaderParamNodes() {
+        return headerParamNodes;
+    }
+
+    public void setHeaderParamNodes(List<ParamNode> headerParamNodes) {
+        this.headerParamNodes = headerParamNodes;
+    }
+
+    public String getRequetsBody() {
+        return requetsBody;
+    }
+
+    public void setRequetsBody(String requetsBody) {
+        this.requetsBody = requetsBody;
     }
 }
