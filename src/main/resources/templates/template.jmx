@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <jmeterTestPlan version="1.2" properties="5.0" jmeter="5.1.1 r1855137">
   <hashTree>
-    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="${title}" enabled="true">
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="测试计划" enabled="true">
       <stringProp name="TestPlan.comments">${description!}</stringProp>
       <boolProp name="TestPlan.functional_mode">false</boolProp>
       <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
@@ -93,7 +93,7 @@
 		<hashTree>
 		<#list tagList as tag>
 		  <GenericController guiclass="LogicControllerGui" testclass="GenericController" testname="${tag.name}" enabled="true">
-            <stringProp name="TestPlan.comments">device-account-controller</stringProp>
+            <stringProp name="TestPlan.comments"></stringProp>
 		  </GenericController>
 		  <hashTree>
 		     <!--遍历请求接口-->
@@ -140,7 +140,7 @@
 				  <stringProp name="HTTPSampler.implementation"></stringProp>
 				  <boolProp name="HTTPSampler.monitor">false</boolProp>
 				  <stringProp name="HTTPSampler.embedded_url_re"></stringProp>
-				  <stringProp name="TestPlan.comments">${req.operationName}</stringProp>
+				  <stringProp name="TestPlan.comments">${req.operationId}</stringProp>
 			  </HTTPSamplerProxy>
 			  <hashTree>
 			     <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="接口header管理器名称" enabled="true">
@@ -157,14 +157,15 @@
                  <hashTree/>
 
 			    <!--每个接口断言定义开始-->
-				 <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="响应断言" enabled="true">
-					<collectionProp name="Asserion.test_strings"/>
-					<stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
-					<boolProp name="Assertion.assume_success">false</boolProp>
-					<intProp name="Assertion.test_type">16</intProp>
-					<stringProp name="Assertion.custom_message"></stringProp>
-				 </ResponseAssertion>
-				 <hashTree/>
+				  <JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Response状态码断言" enabled="true">
+                     <stringProp name="JSON_PATH">$.statusCode</stringProp>
+                     <stringProp name="EXPECTED_VALUE">0</stringProp>
+                     <boolProp name="JSONVALIDATION">true</boolProp>
+                     <boolProp name="EXPECT_NULL">false</boolProp>
+                     <boolProp name="INVERT">false</boolProp>
+                     <boolProp name="ISREGEX">true</boolProp>
+                   </JSONPathAssertion>
+				   <hashTree/>
 				 <!--每个接口断言定义结束-->
 			  </hashTree>
 			  </#list>

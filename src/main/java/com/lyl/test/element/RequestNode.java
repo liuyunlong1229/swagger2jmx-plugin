@@ -14,6 +14,8 @@ public class RequestNode {
 
     private String operationName;
 
+    private String operationId;
+
     private String  requestUrl;
 
     private List<ParamNode> queryParamNodes=new ArrayList<>();
@@ -21,6 +23,10 @@ public class RequestNode {
     private List<ParamNode> headerParamNodes=new ArrayList<>();
 
     private String requestBody =null;
+
+    public String getHttpMethod() {
+        return httpMethod;
+    }
 
     private String httpMethod;
 
@@ -48,11 +54,6 @@ public class RequestNode {
         this.requestUrl = requestUrl;
     }
 
-
-
-    public String getHttpMethod() {
-        return httpMethod;
-    }
 
     public void setHttpMethod(String httpMethod) {
         this.httpMethod = httpMethod;
@@ -82,4 +83,11 @@ public class RequestNode {
         this.headerParamNodes = headerParamNodes;
     }
 
+    public String getOperationId() {
+        return operationId;
+    }
+
+    public void setOperationId(String operationId) {
+        this.operationId = operationId;
+    }
 }

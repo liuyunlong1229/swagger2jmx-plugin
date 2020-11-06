@@ -91,6 +91,25 @@ public class MyDefaultGenerator {
     public TemplateParamVO prepareTemplateData() {
 
 
+        TemplateParamVO templateParamVO = new TemplateParamVO();
+        templateParamVO.setTitle(StringUtils.isBlank(openAPI.getInfo().getTitle())?"测试计划":openAPI.getInfo().getTitle());
+        templateParamVO.setDescription(openAPI.getInfo().getDescription());
+
+
+        String host= "localhost";
+        int port=8080;
+        if(openAPI.getServers().size()> 0){
+            Server server=openAPI.getServers().get(0);
+            URL serverURL= getServerURL(server);
+            if(serverURL != null) {
+                host = serverURL.getHost();
+                port = serverURL.getPort();
+            }
+        }
+
+        templateParamVO.setHost(host);
+        templateParamVO.setPort(port==-1?80:port);
+
         Map<String, TagNode> tagNodeMap = groupTagWithName();
         Iterator pathIterator = openAPI.getPaths().keySet().iterator();
 
@@ -109,23 +128,9 @@ public class MyDefaultGenerator {
             }
         }
 
-        TemplateParamVO templateParamVO = new TemplateParamVO();
-        templateParamVO.setTitle(StringUtils.isBlank(openAPI.getInfo().getTitle())?"测试计划":openAPI.getInfo().getTitle());
-        templateParamVO.setDescription(openAPI.getInfo().getDescription());
 
-        String host= "localhost";
-        int port=8080;
-        if(openAPI.getServers().size()> 0){
-            Server server=openAPI.getServers().get(0);
-            URL serverURL= getServerURL(server);
-            if(serverURL != null) {
-                host = serverURL.getHost();
-                port = serverURL.getPort();
-            }
-        }
 
-        templateParamVO.setHost(host);
-        templateParamVO.setPort(port);
+
 
         for (Map.Entry<String, TagNode> tagNodeEntry : tagNodeMap.entrySet()) {
             if (tagNodeEntry.getValue().getRequestNodes().isEmpty()) {
@@ -195,9 +200,13 @@ public class MyDefaultGenerator {
         }
 
         requestNode.setTag(operation.getTags());
-        requestNode.setOperationName(StringUtils.isBlank(operation.getSummary()) ? operation.getOperationId() : operation.getSummary());
-
-
+        if(StringUtils.isNotBlank(operation.getSummary())){
+           String summary= operation.getSummary().replaceAll("&","&amp;");
+            requestNode.setOperationName(summary);
+        }else{
+            requestNode.setOperationName(operation.getOperationId());
+        }
+        requestNode.setOperationId(operation.getOperationId());
         List<ParamNode> queryParamNodes = new ArrayList<>();
         List<ParamNode> headerParamNodes = new ArrayList<>();
 
@@ -244,7 +253,7 @@ public class MyDefaultGenerator {
                                 queryString= queryString.append("?");
                                 isFirstParam=false;
                             }else {
-                                queryString= queryString.append("&");
+                                queryString= queryString.append("&amp;");
                             }
                             queryString= queryString.append(param.getName()).append("=").append("${"+param.getName()+"}");
                         }
