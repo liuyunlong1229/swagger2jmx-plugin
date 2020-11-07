@@ -1,6 +1,7 @@
-package com.lyl.test;
+package com.lyl.plugin;
 
 /**
+ * 运行参数对象
  * @author yunlong.liu
  * @date 2020-11-06 11:35:10
  */

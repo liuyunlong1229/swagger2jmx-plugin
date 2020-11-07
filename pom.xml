@@ -60,7 +60,6 @@
                 <artifactId>maven-assembly-plugin</artifactId>
                 <configuration>
                     <descriptors>
-                        <!-- assembly配置文件位置 -->
                         <descriptor>src/main/assembly/assembly.xml</descriptor>
                     </descriptors>
                 </configuration>

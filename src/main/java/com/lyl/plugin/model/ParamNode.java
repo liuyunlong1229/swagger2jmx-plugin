@@ -1,6 +1,8 @@
-package com.lyl.test.element;
+package com.lyl.plugin.model;
 
 /**
+ *
+ * 请求的参数节点
  * @author yunlong.liu
  * @date 2020-11-04 15:22:02
  */

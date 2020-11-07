@@ -1,4 +1,4 @@
-package com.lyl.test.parse;
+package com.lyl.plugin.parse;
 
 import io.swagger.v3.parser.core.models.AuthorizationValue;
 import org.slf4j.Logger;

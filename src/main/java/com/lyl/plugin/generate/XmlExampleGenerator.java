@@ -1,6 +1,6 @@
-package com.lyl.test.generate;
+package com.lyl.plugin.generate;
 
-import com.lyl.test.utils.ModelUtils;
+import com.lyl.plugin.utils.ModelUtils;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.XML;

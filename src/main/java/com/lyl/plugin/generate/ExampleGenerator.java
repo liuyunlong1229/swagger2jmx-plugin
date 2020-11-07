@@ -1,6 +1,6 @@
-package com.lyl.test.generate;
+package com.lyl.plugin.generate;
 
-import com.lyl.test.utils.ModelUtils;
+import com.lyl.plugin.utils.ModelUtils;
 import io.swagger.v3.core.util.Json;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.ArraySchema;

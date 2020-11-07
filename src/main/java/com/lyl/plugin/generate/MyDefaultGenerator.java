@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-package com.lyl.test.generate;
+package com.lyl.plugin.generate;
 
-import com.lyl.test.element.ParamNode;
-import com.lyl.test.element.RequestNode;
-import com.lyl.test.element.TagNode;
-import com.lyl.test.element.TemplateParamVO;
-import com.lyl.test.parse.SwaggerParser;
-import com.lyl.test.utils.ModelUtils;
+import com.lyl.plugin.model.ParamNode;
+import com.lyl.plugin.model.RequestNode;
+import com.lyl.plugin.model.TagNode;
+import com.lyl.plugin.vo.TemplateParamVO;
+import com.lyl.plugin.parse.SwaggerParser;
+import com.lyl.plugin.utils.ModelUtils;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -31,13 +31,11 @@ import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.*;
 import io.swagger.v3.oas.models.servers.Server;
-import io.swagger.v3.oas.models.servers.ServerVariables;
 import io.swagger.v3.oas.models.tags.Tag;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -53,9 +51,13 @@ public class MyDefaultGenerator {
 
 
     public void generate(String swaggerSourceLocation,String outPutDir) throws Exception {
+
+        //step1 :解析swagger内容，生成openApi
         SwaggerParseResult swaggerParseResult = new SwaggerParser().readWithInfo(swaggerSourceLocation, null);
         this.openAPI = swaggerParseResult.getOpenAPI();
+       //step2: 封装模板参数对象
         TemplateParamVO templateParamVO = prepareTemplateData();
+        //step3: 填充目标
         paddingTemplate(templateParamVO,outPutDir);
 
 
@@ -197,9 +199,8 @@ public class MyDefaultGenerator {
         } else if (path.getPut() != null) {
             operation = path.getPut();
             requestNode.setHttpMethod(PathItem.HttpMethod.PUT.name());
-
         } else {
-            throw new RuntimeException("非法的请求方式");
+            throw new RuntimeException("["+resourcePath+"]非法的请求方式");
         }
 
         requestNode.setTag(operation.getTags());

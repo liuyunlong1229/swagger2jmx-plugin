@@ -1,10 +1,11 @@
-package com.lyl.test;
+package com.lyl.plugin;
 
 
-import com.lyl.test.generate.MyDefaultGenerator;
+import com.lyl.plugin.generate.MyDefaultGenerator;
 import org.apache.commons.lang3.StringUtils;
 
 /**
+ * 生成器，程序主入口
  * @author yunlong.liu
  * @date 2020-11-03 19:42:43
  */

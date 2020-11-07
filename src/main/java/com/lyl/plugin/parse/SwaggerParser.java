@@ -1,4 +1,4 @@
-package com.lyl.test.parse;
+package com.lyl.plugin.parse;
 
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.parser.core.models.AuthorizationValue;

@@ -1,27 +1,53 @@
-package com.lyl.test.element;
+package com.lyl.plugin.model;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
+ *
+ * 请求节点对应每个http接口
  * @author yunlong.liu
  * @date 2020-11-04 15:20:13
  */
 
 public class RequestNode {
 
+    /**
+     * 接口上面的tag列表
+     */
     private List<String> tag;
 
+    /**
+     * 操作名称，swagger声明的@ApiOperation的value值
+     */
     private String operationName;
 
+
+    /**
+     * 操作id,由接口名称加请求方式构成，如：getByNameUsingPOST
+     */
     private String operationId;
 
+
+    /**
+     * 接口请求路径
+     */
     private String  requestUrl;
 
+
+    /**
+     * 接口的query类型参数名称列表
+     */
     private List<ParamNode> queryParamNodes=new ArrayList<>();
 
+    /**
+     * 接口的header类型参数名称列表
+     */
     private List<ParamNode> headerParamNodes=new ArrayList<>();
 
+    /**
+     * 接口的body类型参数结构
+     */
     private String requestBody =null;
 
     public String getHttpMethod() {
