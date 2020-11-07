@@ -40,7 +40,6 @@ public class JmxGenerator {
           EnvArgs envArgs=new  EnvArgs();
         for(int i=0;i<args.length;i++){
             if(args[i].startsWith("--i=")){
-                System.out.println("args["+i+"]=="+args[i]);
                 String [] source= StringUtils.split(args[i],"=");
                 if(source.length==2) {
                     envArgs.setSwaggerAddr(source[1].trim());
@@ -48,11 +47,14 @@ public class JmxGenerator {
             }
 
             if(args[i].startsWith("--o=")){
-                System.out.println("args["+i+"]=="+args[i]);
                 String [] source= StringUtils.split(args[i],"=");
                 if(source.length==2) {
                     envArgs.setFileOutput(source[1].trim());
                 }
+            }
+
+            if(StringUtils.isNotBlank(envArgs.getSwaggerAddr()) && StringUtils.isNotBlank(envArgs.getFileOutput()) ){
+                break;
             }
         }
 
@@ -61,10 +63,10 @@ public class JmxGenerator {
             System.exit(1);
         }
 
-          if(StringUtils.isBlank(envArgs.getFileOutput())){
+        if(StringUtils.isBlank(envArgs.getFileOutput())){
               System.err.println("请通过[--o=]方式声明生成jmeter脚本目录");
               System.exit(1);
-          }
+        }
 
           return envArgs;
     }

@@ -17,7 +17,6 @@
 
 package com.lyl.test.generate;
 
-import com.google.common.collect.ImmutableMap;
 import com.lyl.test.element.ParamNode;
 import com.lyl.test.element.RequestNode;
 import com.lyl.test.element.TagNode;
@@ -67,6 +66,10 @@ public class MyDefaultGenerator {
         configuration.setClassForTemplateLoading(this.getClass(), "/templates");
         configuration.setDefaultEncoding("utf-8");
         Template template = configuration.getTemplate("template.jmx");
+        File fileDir= new File(outPutDir);
+        if(!fileDir.exists()){
+            fileDir.mkdir();
+        }
         Writer out = new FileWriter(new File(outPutDir+"/auto_test.jmx"));
         template.process(templateParamVO, out);
         out.close();

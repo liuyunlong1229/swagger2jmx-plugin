@@ -4,7 +4,7 @@ Thumbs.db
 /.evosuite/
 /.settings/
 /.idea/
-/bin/
+/src/main/bin/
 /target/
 *.class  
 *.log   
