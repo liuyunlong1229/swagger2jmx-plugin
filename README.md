@@ -1,5 +1,5 @@
 
-2、安装包下载
+1、安装包下载
   https://github.com/liuyunlong1229/swagger2jmx-plugin/releases/ 
 
 
