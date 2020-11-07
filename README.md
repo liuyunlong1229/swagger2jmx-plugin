@@ -1,10 +1,6 @@
 
-1、直接通过源码进行构建
-
-mvn package
-
 2、安装包下载
-https://github.com/liuyunlong1229/swagger2jmx-plugin/releases/tag/v0.0.1
+  https://github.com/liuyunlong1229/swagger2jmx-plugin/releases/ 
 
 
 3、解压后，运行bin目录下的启动startup.cmd文件，运行前先设置2个参数值
