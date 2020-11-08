@@ -20,6 +20,7 @@ package com.lyl.plugin.generate;
 import com.lyl.plugin.model.ParamNode;
 import com.lyl.plugin.model.RequestNode;
 import com.lyl.plugin.model.TagNode;
+import com.lyl.plugin.model.VariableNode;
 import com.lyl.plugin.vo.TemplateParamVO;
 import com.lyl.plugin.parse.SwaggerParser;
 import com.lyl.plugin.utils.ModelUtils;
@@ -117,12 +118,12 @@ public class MyDefaultGenerator {
 
         Map<String, TagNode> tagNodeMap = groupTagWithName();
         Iterator pathIterator = openAPI.getPaths().keySet().iterator();
-
+        List<VariableNode> customVariableList=new ArrayList<>();
         while (pathIterator.hasNext()) {
 
             String resourcePath = (String) pathIterator.next();
             PathItem path = (PathItem) openAPI.getPaths().get(resourcePath);
-            RequestNode requestNode = build(resourcePath, path);
+            RequestNode requestNode = build(resourcePath, path,customVariableList);
             Iterator<String> it = requestNode.getTag().iterator();
             while (it.hasNext()) {
                 String tagName = it.next();
@@ -133,7 +134,7 @@ public class MyDefaultGenerator {
             }
         }
 
-
+        templateParamVO.setCustomVariableList(customVariableList);
 
 
 
@@ -180,7 +181,7 @@ public class MyDefaultGenerator {
 
 
 
-    private RequestNode build(String resourcePath, PathItem path) {
+    private RequestNode build(String resourcePath, PathItem path, List<VariableNode> customVariableList) {
 
         RequestNode requestNode = new RequestNode();
         requestNode.setRequestUrl(resourcePath);
@@ -246,11 +247,13 @@ public class MyDefaultGenerator {
             List<Parameter> parameterList = operation.getParameters();
             if (parameterList != null && !parameterList.isEmpty()) {
                 for (Parameter param : parameterList) {
+                    String variableName=operation.getOperationId()+"."+param.getName();
                     ParamNode paramNode = new ParamNode();
                     if ((param instanceof QueryParameter) || "query".equalsIgnoreCase(param.getIn())) {
-
                         if(requestBodyIsEmpty){
                             paramNode.setParamName(param.getName());
+                            paramNode.setParamValue("${"+variableName+"}");
+                            customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
                             queryParamNodes.add(paramNode);
                         }else{
                             if(isFirstParam){
@@ -259,18 +262,27 @@ public class MyDefaultGenerator {
                             }else {
                                 queryString= queryString.append("&amp;");
                             }
-                            queryString= queryString.append(param.getName()).append("=").append("${"+param.getName()+"}");
+                            queryString= queryString.append(param.getName()).append("=").append(variableName);
+                            customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
+
                         }
 
                     } else if ((param instanceof PathParameter) || "path".equalsIgnoreCase(param.getIn())) {
                         //paramNode.setParamName(param.getName());
                         //queryParamNodes.add(paramNode);
                         //路径参数没法在jmeter里面设置参数列表
+                        String exp="{"+param.getName()+"}";
+                        String target="${"+variableName+"}";
+
+                        requestNode.setRequestUrl(requestNode.getRequestUrl().replace(exp,target));
+                        customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
                     } else if ("body".equalsIgnoreCase(param.getIn())) {
                         LOGGER.info("生成的body参数");
                     } else if ((param instanceof HeaderParameter) || "header".equalsIgnoreCase(param.getIn())) {
                         paramNode.setParamName(param.getName());
+                        paramNode.setParamValue("${"+variableName+"}");
                         headerParamNodes.add(paramNode);
+                        customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
                     }
                 }
 

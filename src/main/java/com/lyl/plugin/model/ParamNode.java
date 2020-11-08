@@ -24,6 +24,11 @@ public class ParamNode {
      */
     private String  paramType;
 
+    /**
+     * 参数描述
+     */
+    private String description;
+
 
     public String getParamName() {
         return paramName;
@@ -47,5 +52,13 @@ public class ParamNode {
 
     public void setParamType(String paramType) {
         this.paramType = paramType;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 }

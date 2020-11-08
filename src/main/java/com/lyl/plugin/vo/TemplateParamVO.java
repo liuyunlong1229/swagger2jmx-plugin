@@ -1,6 +1,8 @@
 package com.lyl.plugin.vo;
 
+import com.lyl.plugin.model.ParamNode;
 import com.lyl.plugin.model.TagNode;
+import com.lyl.plugin.model.VariableNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +42,13 @@ public class TemplateParamVO {
      */
     private List<TagNode> tagList=new ArrayList<>();
 
+    /**
+     * 自定义参数变量
+     */
+    private List<VariableNode> customVariableList=new ArrayList<>();
+
+
+
     public List<TagNode> getTagList() {
         return tagList;
     }
@@ -78,5 +87,13 @@ public class TemplateParamVO {
 
     public int getPort() {
         return port;
+    }
+
+    public List<VariableNode> getCustomVariableList() {
+        return customVariableList;
+    }
+
+    public void setCustomVariableList(List<VariableNode> customVariableList) {
+        this.customVariableList = customVariableList;
     }
 }

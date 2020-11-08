@@ -78,11 +78,15 @@
 		<!--自定义变量开始-->
 		<Arguments guiclass="ArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">
           <collectionProp name="Arguments.arguments">
+
+           <#list customVariableList as cv>
             <elementProp name="vin" elementType="Argument">
-              <stringProp name="Argument.name">vin</stringProp>
-              <stringProp name="Argument.value">LNBSCU4H8JS011386</stringProp>
+              <stringProp name="Argument.name">${cv.name}</stringProp>
+              <stringProp name="Argument.value">${cv.value!}</stringProp>
               <stringProp name="Argument.metadata">=</stringProp>
+              <stringProp name="Argument.desc">${cv.description!}</stringProp>
             </elementProp>
+             </#list>
           </collectionProp>
         </Arguments>
         <hashTree/>
@@ -119,7 +123,7 @@
 							<stringProp name="Argument.metadata">=</stringProp>
 							<boolProp name="HTTPArgument.use_equals">true</boolProp>
 							<stringProp name="Argument.name">${qp.paramName}</stringProp>
-							<stringProp name="Argument.value">${r"${"}${qp.paramName}${"}"}</stringProp>
+							<stringProp name="Argument.value">${qp.paramValue}</stringProp>
 						 </elementProp>
 						</#list>
 					</collectionProp>
@@ -148,7 +152,7 @@
                       <#list req.headerParamNodes as hp>
                        <elementProp name="" elementType="Header">
                          <stringProp name="Header.name">${hp.paramName}</stringProp>
-                         <stringProp name="Header.value">${r"${"}${hp.paramName}${"}"}</stringProp>
+                         <stringProp name="Header.value">${hp.paramValue}</stringProp>
                        </elementProp>
                        </#list>
                      </collectionProp>
