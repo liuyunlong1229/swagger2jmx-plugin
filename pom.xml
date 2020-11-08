@@ -49,7 +49,7 @@
                         <manifest>
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>lib/</classpathPrefix>
-                            <mainClass>com.lyl.test.JmxGenerator</mainClass>
+                            <mainClass>com.lyl.plugin.JmxGenerator</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
