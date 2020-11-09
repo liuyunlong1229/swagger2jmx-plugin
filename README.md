@@ -19,3 +19,6 @@ SWAGGER_LOCATION=D:/swagger.json
 例如保存到D:/jmeter目录下，可以这么设置
 
 JMX_FILE_DIR=D:/jmeter/
+
+
+https://images.gitee.com/uploads/images/2020/1107/211059_003c5955_1615225.png
