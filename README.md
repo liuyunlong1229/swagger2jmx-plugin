@@ -1,6 +1,6 @@
 一、获取工具包
 
-1、直接到 https://github.com/liuyunlong1229/swagger2jmx-plugin/archive/v0.0.2.zip 下载
+1、直接到 https://github.com/liuyunlong1229/swagger2jmx-plugin/releases 下载
 
 2、有maven环境的话，直接在本地执行mvn package生成
 
