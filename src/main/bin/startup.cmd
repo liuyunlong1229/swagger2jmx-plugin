@@ -38,3 +38,5 @@ set COMMAND="%JAVA%" %EXEC_OPTS%
 
 rem start generate command
 %COMMAND%
+
+pause
