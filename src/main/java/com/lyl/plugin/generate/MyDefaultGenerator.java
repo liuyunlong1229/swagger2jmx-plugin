@@ -58,7 +58,7 @@ public class MyDefaultGenerator {
         this.openAPI = swaggerParseResult.getOpenAPI();
        //step2: 封装模板参数对象
         TemplateParamVO templateParamVO = prepareTemplateData();
-        //step3: 填充目标
+        //step3: 填充模板
         paddingTemplate(templateParamVO,outPutDir);
 
 

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.models.media.*;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.parameters.RequestBody;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.parser.util.SchemaTypeUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,487 +19,711 @@ import java.util.stream.Collectors;
 
 public class ModelUtils {
 
-
     private static final Logger LOGGER = LoggerFactory.getLogger(ModelUtils.class);
+
     private static final String URI_FORMAT = "uri";
+
     private static final String generateAliasAsModelKey = "generateAliasAsModel";
 
-    public ModelUtils() {
-    }
 
-    public static void setGenerateAliasAsModel(boolean value) {
-        // GlobalSettings.setProperty("generateAliasAsModel", Boolean.toString(value));
-    }
 
-    public static boolean isGenerateAliasAsModel() {
-        // return Boolean.parseBoolean(GlobalSettings.getProperty("generateAliasAsModel", "false"));
-        return false;
-    }
 
-//    public static CodegenModel getModelByName(String name, Map<String, Object> models) {
-//        Object data = models.get(name);
-//        if (data instanceof Map) {
-//            Map<?, ?> dataMap = (Map)data;
-//            Object dataModels = dataMap.get("models");
-//            if (dataModels instanceof List) {
-//                List<?> dataModelsList = (List)dataModels;
-//                Iterator var6 = dataModelsList.iterator();
-//
-//                while(var6.hasNext()) {
-//                    Object entry = var6.next();
-//                    if (entry instanceof Map) {
-//                        Map<?, ?> entryMap = (Map)entry;
-//                        Object model = entryMap.get("model");
-//                        if (model instanceof CodegenModel) {
-//                            return (CodegenModel)model;
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//
-//        return null;
-//    }
-
+    /**
+     * Return the list of all schemas in the 'components/schemas' section used in the openAPI specification
+     *
+     * @param openAPI specification
+     * @return schemas a list of used schemas
+     */
     public static List<String> getAllUsedSchemas(OpenAPI openAPI) {
         Map<String, List<String>> childrenMap = getChildrenMap(openAPI);
-        List<String> allUsedSchemas = new ArrayList();
+        List<String> allUsedSchemas = new ArrayList<String>();
         visitOpenAPI(openAPI, (s, t) -> {
             if (s.get$ref() != null) {
                 String ref = getSimpleRef(s.get$ref());
                 if (!allUsedSchemas.contains(ref)) {
                     allUsedSchemas.add(ref);
                 }
-
                 if (childrenMap.containsKey(ref)) {
-                    Iterator var5 = ((List)childrenMap.get(ref)).iterator();
-
-                    while(var5.hasNext()) {
-                        String child = (String)var5.next();
+                    for (String child : childrenMap.get(ref)) {
                         if (!allUsedSchemas.contains(child)) {
                             allUsedSchemas.add(child);
                         }
                     }
                 }
             }
-
         });
         return allUsedSchemas;
     }
 
+    /**
+     * Return the list of unused schemas in the 'components/schemas' section of an openAPI specification
+     *
+     * @param openAPI specification
+     * @return schemas a list of unused schemas
+     */
+    public static List<String> getUnusedSchemas(OpenAPI openAPI) {
+        final Map<String, List<String>> childrenMap;
+        Map<String, List<String>> tmpChildrenMap;
+        try {
+            tmpChildrenMap = getChildrenMap(openAPI);
+        } catch (NullPointerException npe) {
+            // in rare cases, such as a spec document with only one top-level oneOf schema and multiple referenced schemas,
+            // the stream used in getChildrenMap will raise an NPE. Rather than modify getChildrenMap which is used by getAllUsedSchemas,
+            // we'll catch here as a workaround for this edge case.
+            tmpChildrenMap = new HashMap<>();
+        }
 
+        childrenMap = tmpChildrenMap;
+        List<String> unusedSchemas = new ArrayList<String>();
 
-    private static void visitOpenAPI(OpenAPI openAPI, ModelUtils.OpenAPISchemaVisitor visitor) {
+        Map<String, Schema> schemas = getSchemas(openAPI);
+        unusedSchemas.addAll(schemas.keySet());
+
+        visitOpenAPI(openAPI, (s, t) -> {
+            if (s.get$ref() != null) {
+                String ref = getSimpleRef(s.get$ref());
+                unusedSchemas.remove(ref);
+                if (childrenMap.containsKey(ref)) {
+                    unusedSchemas.removeAll(childrenMap.get(ref));
+                }
+            }
+        });
+        return unusedSchemas;
+    }
+
+    /**
+     * Return the list of schemas in the 'components/schemas' used only in a 'application/x-www-form-urlencoded' or 'multipart/form-data' mime time
+     *
+     * @param openAPI specification
+     * @return schemas a list of schemas
+     */
+    public static List<String> getSchemasUsedOnlyInFormParam(OpenAPI openAPI) {
+        List<String> schemasUsedInFormParam = new ArrayList<String>();
+        List<String> schemasUsedInOtherCases = new ArrayList<String>();
+
+        visitOpenAPI(openAPI, (s, t) -> {
+            if (s.get$ref() != null) {
+                String ref = getSimpleRef(s.get$ref());
+                if ("application/x-www-form-urlencoded".equalsIgnoreCase(t) ||
+                        "multipart/form-data".equalsIgnoreCase(t)) {
+                    schemasUsedInFormParam.add(ref);
+                } else {
+                    schemasUsedInOtherCases.add(ref);
+                }
+            }
+        });
+        return schemasUsedInFormParam.stream().filter(n -> !schemasUsedInOtherCases.contains(n)).collect(Collectors.toList());
+    }
+
+    /**
+     * Private method used by several methods ({@link #getAllUsedSchemas(OpenAPI)},
+     * {@link #getUnusedSchemas(OpenAPI)},
+     * {@link #getSchemasUsedOnlyInFormParam(OpenAPI)}, ...) to traverse all paths of an
+     * OpenAPI instance and call the visitor functional interface when a schema is found.
+     *
+     * @param openAPI specification
+     * @param visitor functional interface (can be defined as a lambda) called each time a schema is found.
+     */
+    private static void visitOpenAPI(OpenAPI openAPI, OpenAPISchemaVisitor visitor) {
         Map<String, PathItem> paths = openAPI.getPaths();
-        List<String> visitedSchemas = new ArrayList();
-        if (paths != null) {
-            Iterator var4 = paths.values().iterator();
+        List<String> visitedSchemas = new ArrayList<>();
 
-            while(var4.hasNext()) {
-                PathItem path = (PathItem)var4.next();
+        if (paths != null) {
+            for (PathItem path : paths.values()) {
                 visitPathItem(path, openAPI, visitor, visitedSchemas);
             }
         }
-
     }
 
-    private static void visitPathItem(PathItem pathItem, OpenAPI openAPI, ModelUtils.OpenAPISchemaVisitor visitor, List<String> visitedSchemas) {
+    private static void visitPathItem(PathItem pathItem, OpenAPI openAPI, OpenAPISchemaVisitor visitor, List<String> visitedSchemas) {
         List<Operation> allOperations = pathItem.readOperations();
         if (allOperations != null) {
-            Iterator var5 = allOperations.iterator();
+            for (Operation operation : allOperations) {
+                //Params:
+                visitParameters(openAPI, operation.getParameters(), visitor, visitedSchemas);
 
-            label76:
-            while(true) {
-                Operation operation;
-                Iterator var8;
-                Iterator var11;
-                label60:
-                do {
-                    if (!var5.hasNext()) {
-                        break label76;
-                    }
+                //RequestBody:
+                RequestBody requestBody = getReferencedRequestBody(openAPI, operation.getRequestBody());
+                if (requestBody != null) {
+                    visitContent(openAPI, requestBody.getContent(), visitor, visitedSchemas);
+                }
 
-                    operation = (Operation)var5.next();
-                    visitParameters(openAPI, operation.getParameters(), visitor, visitedSchemas);
-                    RequestBody requestBody = getReferencedRequestBody(openAPI, operation.getRequestBody());
-                    if (requestBody != null) {
-                        visitContent(openAPI, requestBody.getContent(), visitor, visitedSchemas);
-                    }
-
-                    if (operation.getResponses() != null) {
-                        var8 = operation.getResponses().values().iterator();
-
-                        while(true) {
-                            ApiResponse apiResponse;
-                            do {
-                                do {
-                                    if (!var8.hasNext()) {
-                                        continue label60;
+                //Responses:
+                if (operation.getResponses() != null) {
+                    for (ApiResponse r : operation.getResponses().values()) {
+                        ApiResponse apiResponse = getReferencedApiResponse(openAPI, r);
+                        if (apiResponse != null) {
+                            visitContent(openAPI, apiResponse.getContent(), visitor, visitedSchemas);
+                            if (apiResponse.getHeaders() != null) {
+                                for (Map.Entry<String, Header> e : apiResponse.getHeaders().entrySet()) {
+                                    Header header = getReferencedHeader(openAPI, e.getValue());
+                                    if (header.getSchema() != null) {
+                                        visitSchema(openAPI, header.getSchema(), e.getKey(), visitedSchemas, visitor);
                                     }
-
-                                    ApiResponse r = (ApiResponse)var8.next();
-                                    apiResponse = getReferencedApiResponse(openAPI, r);
-                                } while(apiResponse == null);
-
-                                visitContent(openAPI, apiResponse.getContent(), visitor, visitedSchemas);
-                            } while(apiResponse.getHeaders() == null);
-
-                            Header header;
-                            for(var11 = apiResponse.getHeaders().entrySet().iterator(); var11.hasNext(); visitContent(openAPI, header.getContent(), visitor, visitedSchemas)) {
-                                Map.Entry<String, Header> e = (Map.Entry)var11.next();
-                                header = getReferencedHeader(openAPI, (Header)e.getValue());
-                                if (header.getSchema() != null) {
-                                    visitSchema(openAPI, header.getSchema(), (String)e.getKey(), visitedSchemas, visitor);
+                                    visitContent(openAPI, header.getContent(), visitor, visitedSchemas);
                                 }
                             }
                         }
                     }
-                } while(operation.getCallbacks() == null);
+                }
 
-                var8 = operation.getCallbacks().values().iterator();
-
-                while(true) {
-                    Callback callback;
-                    do {
-                        if (!var8.hasNext()) {
-                            continue label76;
+                //Callbacks:
+                if (operation.getCallbacks() != null) {
+                    for (Callback c : operation.getCallbacks().values()) {
+                        Callback callback = getReferencedCallback(openAPI, c);
+                        if (callback != null) {
+                            for (PathItem p : callback.values()) {
+                                visitPathItem(p, openAPI, visitor, visitedSchemas);
+                            }
                         }
-
-                        Callback c = (Callback)var8.next();
-                        callback = getReferencedCallback(openAPI, c);
-                    } while(callback == null);
-
-                    var11 = callback.values().iterator();
-
-                    while(var11.hasNext()) {
-                        PathItem p = (PathItem)var11.next();
-                        visitPathItem(p, openAPI, visitor, visitedSchemas);
                     }
                 }
             }
         }
-
+        //Params:
         visitParameters(openAPI, pathItem.getParameters(), visitor, visitedSchemas);
     }
 
-    private static void visitParameters(OpenAPI openAPI, List<Parameter> parameters, ModelUtils.OpenAPISchemaVisitor visitor, List<String> visitedSchemas) {
+    private static void visitParameters(OpenAPI openAPI, List<Parameter> parameters, OpenAPISchemaVisitor visitor,
+                                        List<String> visitedSchemas) {
         if (parameters != null) {
-            Iterator var4 = parameters.iterator();
-
-            while(var4.hasNext()) {
-                Parameter p = (Parameter)var4.next();
+            for (Parameter p : parameters) {
                 Parameter parameter = getReferencedParameter(openAPI, p);
                 if (parameter != null) {
                     if (parameter.getSchema() != null) {
-                        visitSchema(openAPI, parameter.getSchema(), (String)null, visitedSchemas, visitor);
+                        visitSchema(openAPI, parameter.getSchema(), null, visitedSchemas, visitor);
                     }
-
                     visitContent(openAPI, parameter.getContent(), visitor, visitedSchemas);
                 } else {
                     LOGGER.warn("Unreferenced parameter(s) found.");
                 }
             }
         }
-
     }
 
-    private static void visitContent(OpenAPI openAPI, Content content, ModelUtils.OpenAPISchemaVisitor visitor, List<String> visitedSchemas) {
+    private static void visitContent(OpenAPI openAPI, Content content, OpenAPISchemaVisitor visitor, List<String> visitedSchemas) {
         if (content != null) {
-            Iterator var4 = content.entrySet().iterator();
-
-            while(var4.hasNext()) {
-                Map.Entry<String, MediaType> e = (Map.Entry)var4.next();
-                if (((MediaType)e.getValue()).getSchema() != null) {
-                    visitSchema(openAPI, ((MediaType)e.getValue()).getSchema(), (String)e.getKey(), visitedSchemas, visitor);
+            for (Map.Entry<String, MediaType> e : content.entrySet()) {
+                if (e.getValue().getSchema() != null) {
+                    visitSchema(openAPI, e.getValue().getSchema(), e.getKey(), visitedSchemas, visitor);
                 }
             }
         }
-
     }
 
-    private static void visitSchema(OpenAPI openAPI, Schema schema, String mimeType, List<String> visitedSchemas, ModelUtils.OpenAPISchemaVisitor visitor) {
+    /**
+     * Invoke the specified visitor function for every schema that matches mimeType in the OpenAPI document.
+     *
+     * To avoid infinite recursion, referenced schemas are visited only once. When a referenced schema is visited,
+     * it is added to visitedSchemas.
+     *
+     * @param openAPI the OpenAPI document that contains schema objects.
+     * @param schema the root schema object to be visited.
+     * @param mimeType the mime type. TODO: does not seem to be used in a meaningful way.
+     * @param visitedSchemas the list of referenced schemas that have been visited.
+     * @param visitor the visitor function which is invoked for every visited schema.
+     */
+    private static void visitSchema(OpenAPI openAPI, Schema schema, String mimeType, List<String> visitedSchemas, OpenAPISchemaVisitor visitor) {
         visitor.visit(schema, mimeType);
         if (schema.get$ref() != null) {
             String ref = getSimpleRef(schema.get$ref());
             if (!visitedSchemas.contains(ref)) {
                 visitedSchemas.add(ref);
-                Schema referencedSchema = (Schema)getSchemas(openAPI).get(ref);
+                Schema referencedSchema = getSchemas(openAPI).get(ref);
                 if (referencedSchema != null) {
                     visitSchema(openAPI, referencedSchema, mimeType, visitedSchemas, visitor);
                 }
             }
         }
-
-        Schema property;
-        Iterator var13;
         if (schema instanceof ComposedSchema) {
-            List<Schema> oneOf = ((ComposedSchema)schema).getOneOf();
+            List<Schema> oneOf = ((ComposedSchema) schema).getOneOf();
             if (oneOf != null) {
-                var13 = oneOf.iterator();
-
-                while(var13.hasNext()) {
-                    property = (Schema)var13.next();
-                    visitSchema(openAPI, property, mimeType, visitedSchemas, visitor);
-                }
-            }
-
-            List<Schema> allOf = ((ComposedSchema)schema).getAllOf();
-            if (allOf != null) {
-                Iterator var16 = allOf.iterator();
-
-                while(var16.hasNext()) {
-                    Schema s = (Schema)var16.next();
+                for (Schema s : oneOf) {
                     visitSchema(openAPI, s, mimeType, visitedSchemas, visitor);
                 }
             }
-
-            List<Schema> anyOf = ((ComposedSchema)schema).getAnyOf();
+            List<Schema> allOf = ((ComposedSchema) schema).getAllOf();
+            if (allOf != null) {
+                for (Schema s : allOf) {
+                    visitSchema(openAPI, s, mimeType, visitedSchemas, visitor);
+                }
+            }
+            List<Schema> anyOf = ((ComposedSchema) schema).getAnyOf();
             if (anyOf != null) {
-                Iterator var18 = anyOf.iterator();
-
-                while(var18.hasNext()) {
-                    Schema s = (Schema)var18.next();
+                for (Schema s : anyOf) {
                     visitSchema(openAPI, s, mimeType, visitedSchemas, visitor);
                 }
             }
         } else if (schema instanceof ArraySchema) {
-            Schema itemsSchema = ((ArraySchema)schema).getItems();
+            Schema itemsSchema = ((ArraySchema) schema).getItems();
             if (itemsSchema != null) {
                 visitSchema(openAPI, itemsSchema, mimeType, visitedSchemas, visitor);
             }
         } else if (isMapSchema(schema)) {
             Object additionalProperties = schema.getAdditionalProperties();
             if (additionalProperties instanceof Schema) {
-                visitSchema(openAPI, (Schema)additionalProperties, mimeType, visitedSchemas, visitor);
+                visitSchema(openAPI, (Schema) additionalProperties, mimeType, visitedSchemas, visitor);
             }
         }
-
         if (schema.getNot() != null) {
             visitSchema(openAPI, schema.getNot(), mimeType, visitedSchemas, visitor);
         }
-
         Map<String, Schema> properties = schema.getProperties();
         if (properties != null) {
-            var13 = properties.values().iterator();
-
-            while(var13.hasNext()) {
-                property = (Schema)var13.next();
+            for (Schema property : properties.values()) {
                 visitSchema(openAPI, property, mimeType, visitedSchemas, visitor);
             }
         }
+    }
 
+    @FunctionalInterface
+    private static interface OpenAPISchemaVisitor {
+
+        public void visit(Schema schema, String mimeType);
     }
 
     public static String getSimpleRef(String ref) {
         if (ref.startsWith("#/components/")) {
             ref = ref.substring(ref.lastIndexOf("/") + 1);
-        } else {
-            if (!ref.startsWith("#/definitions/")) {
-                LOGGER.warn("Failed to get the schema name: {}", ref);
-                return null;
-            }
-
+        } else if (ref.startsWith("#/definitions/")) {
             ref = ref.substring(ref.lastIndexOf("/") + 1);
+        } else {
+            LOGGER.warn("Failed to get the schema name: {}", ref);
+            //throw new RuntimeException("Failed to get the schema: " + ref);
+            return null;
+
         }
 
         return ref;
     }
 
+    /**
+     * Return true if the specified schema is an object with a fixed number of properties.
+     *
+     * A ObjectSchema differs from an MapSchema in the following way:
+     * - An ObjectSchema is not extensible, i.e. it has a fixed number of properties.
+     * - A MapSchema is an object that can be extended with an arbitrary set of properties.
+     *   The payload may include dynamic properties.
+     *
+     * For example, an OpenAPI schema is considered an ObjectSchema in the following scenarios:
+     *
+     *   type: object
+     *   additionalProperties: false
+     *   properties:
+     *     name:
+     *       type: string
+     *     address:
+     *       type: string
+     *
+     * @param schema the OAS schema
+     * @return true if the specified schema is an Object schema.
+     */
     public static boolean isObjectSchema(Schema schema) {
         if (schema instanceof ObjectSchema) {
             return true;
-        } else if ("object".equals(schema.getType()) && !(schema instanceof MapSchema)) {
-            return true;
-        } else {
-            return schema.getType() == null && schema.getProperties() != null && !schema.getProperties().isEmpty();
         }
+
+        // must not be a map
+        if (SchemaTypeUtil.OBJECT_TYPE.equals(schema.getType()) && !(schema instanceof MapSchema)) {
+            return true;
+        }
+
+        // must have at least one property
+        if (schema.getType() == null && schema.getProperties() != null && !schema.getProperties().isEmpty()) {
+            return true;
+        }
+        return false;
     }
 
+    /**
+     * Return true if the specified schema is composed, i.e. if it uses
+     * 'oneOf', 'anyOf' or 'allOf'.
+     *
+     * @param schema the OAS schema
+     * @return true if the specified schema is a Composed schema.
+     */
     public static boolean isComposedSchema(Schema schema) {
-        return schema instanceof ComposedSchema;
+        if (schema instanceof ComposedSchema) {
+            return true;
+        }
+        return false;
     }
 
+    /**
+     * Return true if the specified 'schema' is an object that can be extended with additional properties.
+     * Additional properties means a Schema should support all explicitly defined properties plus any
+     * undeclared properties.
+     *
+     * A MapSchema differs from an ObjectSchema in the following way:
+     * - An ObjectSchema is not extensible, i.e. it has a fixed number of properties.
+     * - A MapSchema is an object that can be extended with an arbitrary set of properties.
+     *   The payload may include dynamic properties.
+     *
+     * Note that isMapSchema returns true for a composed schema (allOf, anyOf, oneOf) that also defines
+     * additionalproperties.
+     *
+     * For example, an OpenAPI schema is considered a MapSchema in the following scenarios:
+     *
+     *   type: object
+     *   additionalProperties: true
+     *
+     *   type: object
+     *   additionalProperties:
+     *     type: object
+     *     properties:
+     *       code:
+     *         type: integer
+     *
+     *   allOf:
+     *     - $ref: '#/components/schemas/Class1'
+     *     - $ref: '#/components/schemas/Class2'
+     *   additionalProperties: true
+     *
+     * @param schema the OAS schema
+     * @return true if the specified schema is a Map schema.
+     */
     public static boolean isMapSchema(Schema schema) {
         if (schema instanceof MapSchema) {
             return true;
-        } else if (schema == null) {
-            return false;
-        } else if (schema.getAdditionalProperties() instanceof Schema) {
-            return true;
-        } else {
-            return schema.getAdditionalProperties() instanceof Boolean && (Boolean)schema.getAdditionalProperties();
         }
+
+        if (schema == null) {
+            return false;
+        }
+
+        if (schema.getAdditionalProperties() instanceof Schema) {
+            return true;
+        }
+
+        if (schema.getAdditionalProperties() instanceof Boolean && (Boolean) schema.getAdditionalProperties()) {
+            return true;
+        }
+
+        return false;
     }
 
+    /**
+     * Return true if the specified schema is an array of items.
+     *
+     * @param schema the OAS schema
+     * @return true if the specified schema is an Array schema.
+     */
     public static boolean isArraySchema(Schema schema) {
-        return schema instanceof ArraySchema;
+        return (schema instanceof ArraySchema);
     }
 
     public static boolean isSet(Schema schema) {
-        return isArraySchema(schema) && Boolean.TRUE.equals(schema.getUniqueItems());
+        return ModelUtils.isArraySchema(schema) && Boolean.TRUE.equals(schema.getUniqueItems());
     }
 
     public static boolean isStringSchema(Schema schema) {
-        return schema instanceof StringSchema || "string".equals(schema.getType());
+        if (schema instanceof StringSchema || SchemaTypeUtil.STRING_TYPE.equals(schema.getType())) {
+            return true;
+        }
+        return false;
     }
 
     public static boolean isIntegerSchema(Schema schema) {
         if (schema instanceof IntegerSchema) {
             return true;
-        } else {
-            return "integer".equals(schema.getType());
         }
+        if (SchemaTypeUtil.INTEGER_TYPE.equals(schema.getType())) {
+            return true;
+        }
+        return false;
     }
 
     public static boolean isShortSchema(Schema schema) {
-        return "integer".equals(schema.getType()) && "int32".equals(schema.getFormat());
+        if (SchemaTypeUtil.INTEGER_TYPE.equals(schema.getType()) // type: integer
+                && SchemaTypeUtil.INTEGER32_FORMAT.equals(schema.getFormat())) { // format: short (int32)
+            return true;
+        }
+        return false;
     }
 
     public static boolean isLongSchema(Schema schema) {
-        return "integer".equals(schema.getType()) && "int64".equals(schema.getFormat());
+        if (SchemaTypeUtil.INTEGER_TYPE.equals(schema.getType()) // type: integer
+                && SchemaTypeUtil.INTEGER64_FORMAT.equals(schema.getFormat())) { // format: long (int64)
+            return true;
+        }
+        return false;
     }
 
     public static boolean isBooleanSchema(Schema schema) {
         if (schema instanceof BooleanSchema) {
             return true;
-        } else {
-            return "boolean".equals(schema.getType());
         }
+        if (SchemaTypeUtil.BOOLEAN_TYPE.equals(schema.getType())) {
+            return true;
+        }
+        return false;
     }
 
     public static boolean isNumberSchema(Schema schema) {
         if (schema instanceof NumberSchema) {
             return true;
-        } else {
-            return "number".equals(schema.getType());
         }
+        if (SchemaTypeUtil.NUMBER_TYPE.equals(schema.getType())) {
+            return true;
+        }
+        return false;
     }
 
     public static boolean isFloatSchema(Schema schema) {
-        return "number".equals(schema.getType()) && "float".equals(schema.getFormat());
+        if (SchemaTypeUtil.NUMBER_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.FLOAT_FORMAT.equals(schema.getFormat())) { // format: float
+            return true;
+        }
+        return false;
     }
 
     public static boolean isDoubleSchema(Schema schema) {
-        return "number".equals(schema.getType()) && "double".equals(schema.getFormat());
+        if (SchemaTypeUtil.NUMBER_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.DOUBLE_FORMAT.equals(schema.getFormat())) { // format: double
+            return true;
+        }
+        return false;
     }
 
     public static boolean isDateSchema(Schema schema) {
         if (schema instanceof DateSchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "date".equals(schema.getFormat());
         }
+
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.DATE_FORMAT.equals(schema.getFormat())) { // format: date
+            return true;
+        }
+        return false;
     }
 
     public static boolean isDateTimeSchema(Schema schema) {
         if (schema instanceof DateTimeSchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "date-time".equals(schema.getFormat());
         }
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.DATE_TIME_FORMAT.equals(schema.getFormat())) { // format: date-time
+            return true;
+        }
+        return false;
     }
 
     public static boolean isPasswordSchema(Schema schema) {
         if (schema instanceof PasswordSchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "password".equals(schema.getFormat());
         }
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.PASSWORD_FORMAT.equals(schema.getFormat())) { // double
+            return true;
+        }
+        return false;
     }
 
     public static boolean isByteArraySchema(Schema schema) {
         if (schema instanceof ByteArraySchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "byte".equals(schema.getFormat());
         }
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.BYTE_FORMAT.equals(schema.getFormat())) { // format: byte
+            return true;
+        }
+        return false;
     }
 
     public static boolean isBinarySchema(Schema schema) {
         if (schema instanceof BinarySchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "binary".equals(schema.getFormat());
         }
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.BINARY_FORMAT.equals(schema.getFormat())) { // format: binary
+            return true;
+        }
+        return false;
     }
 
     public static boolean isFileSchema(Schema schema) {
-        return schema instanceof FileSchema ? true : isBinarySchema(schema);
+        if (schema instanceof FileSchema) {
+            return true;
+        }
+        // file type in oas2 mapped to binary in oas3
+        return isBinarySchema(schema);
     }
 
     public static boolean isUUIDSchema(Schema schema) {
         if (schema instanceof UUIDSchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "uuid".equals(schema.getFormat());
         }
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.UUID_FORMAT.equals(schema.getFormat())) { // format: uuid
+            return true;
+        }
+        return false;
     }
 
     public static boolean isURISchema(Schema schema) {
-        return "string".equals(schema.getType()) && "uri".equals(schema.getFormat());
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && URI_FORMAT.equals(schema.getFormat())) { // format: uri
+            return true;
+        }
+        return false;
     }
 
     public static boolean isEmailSchema(Schema schema) {
         if (schema instanceof EmailSchema) {
             return true;
-        } else {
-            return "string".equals(schema.getType()) && "email".equals(schema.getFormat());
         }
+        if (SchemaTypeUtil.STRING_TYPE.equals(schema.getType())
+                && SchemaTypeUtil.EMAIL_FORMAT.equals(schema.getFormat())) { // format: email
+            return true;
+        }
+        return false;
     }
 
+    /**
+     * Check to see if the schema is a model with at least one property.
+     *
+     * @param schema potentially containing a '$ref'
+     * @return true if it's a model with at least one properties
+     */
     public static boolean isModel(Schema schema) {
         if (schema == null) {
+            // TODO: Is this message necessary? A null schema is not a model, so the result is correct.
             LOGGER.error("Schema cannot be null in isModel check");
             return false;
-        } else {
-            return schema.getProperties() != null && !schema.getProperties().isEmpty() ? true : schema instanceof ComposedSchema;
         }
+
+        // has at least one property
+        if (schema.getProperties() != null && !schema.getProperties().isEmpty()) {
+            return true;
+        }
+
+        // composed schema is a model
+        return schema instanceof ComposedSchema;
     }
 
+    /**
+     * Return true if the schema value can be any type, i.e. it can be
+     * the null value, integer, number, string, object or array.
+     * One use case is when the "type" attribute in the OAS schema is unspecified.
+     *
+     * Examples:
+     *
+     *     arbitraryTypeValue:
+     *       description: This is an arbitrary type schema.
+     *         It is not a free-form object.
+     *         The value can be any type except the 'null' value.
+     *     arbitraryTypeNullableValue:
+     *       description: This is an arbitrary type schema.
+     *         It is not a free-form object.
+     *         The value can be any type, including the 'null' value.
+     *       nullable: true
+     *
+     * @param schema the OAS schema.
+     * @return true if the schema value can be an arbitrary type.
+     */
     public static boolean isAnyTypeSchema(Schema schema) {
         if (schema == null) {
             LOGGER.error("Schema cannot be null in isAnyTypeSchema check");
             return false;
-        } else if (isFreeFormObject(schema)) {
-            return false;
-        } else {
-            return schema.getClass().equals(Schema.class) && schema.get$ref() == null && schema.getType() == null && (schema.getProperties() == null || schema.getProperties().isEmpty()) && schema.getAdditionalProperties() == null && schema.getNot() == null && schema.getEnum() == null;
         }
+
+        if (isFreeFormObject(schema)) {
+            // make sure it's not free form object
+            return false;
+        }
+
+        if (schema.getClass().equals(Schema.class) && schema.get$ref() == null && schema.getType() == null &&
+                (schema.getProperties() == null || schema.getProperties().isEmpty()) &&
+                schema.getAdditionalProperties() == null && schema.getNot() == null &&
+                schema.getEnum() == null) {
+            return true;
+            // If and when type arrays are supported in a future OAS specification,
+            // we could return true if the type array includes all possible JSON schema types.
+        }
+        return false;
     }
 
+    /**
+     * Check to see if the schema is a free form object.
+     *
+     * A free form object is an object (i.e. 'type: object' in a OAS document) that:
+     * 1) Does not define properties, and
+     * 2) Is not a composed schema (no anyOf, oneOf, allOf), and
+     * 3) additionalproperties is not defined, or additionalproperties: true, or additionalproperties: {}.
+     *
+     * Examples:
+     *
+     * components:
+     *   schemas:
+     *     arbitraryObject:
+     *       type: object
+     *       description: This is a free-form object.
+     *         The value must be a map of strings to values. The value cannot be 'null'.
+     *         It cannot be array, string, integer, number.
+     *     arbitraryNullableObject:
+     *       type: object
+     *       description: This is a free-form object.
+     *         The value must be a map of strings to values. The value can be 'null',
+     *         It cannot be array, string, integer, number.
+     *       nullable: true
+     *     arbitraryTypeValue:
+     *       description: This is NOT a free-form object.
+     *         The value can be any type except the 'null' value.
+     *
+     * @param schema potentially containing a '$ref'
+     * @return true if it's a free-form object
+     */
     public static boolean isFreeFormObject(Schema schema) {
         if (schema == null) {
+            // TODO: Is this message necessary? A null schema is not a free-form object, so the result is correct.
             LOGGER.error("Schema cannot be null in isFreeFormObject check");
             return false;
-        } else {
-            if (schema instanceof ComposedSchema) {
-                ComposedSchema cs = (ComposedSchema)schema;
-                List<Schema> interfaces = getInterfaces(cs);
-                if (interfaces != null && !interfaces.isEmpty()) {
-                    return false;
-                }
-            }
+        }
 
-            if ("object".equals(schema.getType()) && (schema.getProperties() == null || schema.getProperties().isEmpty())) {
+        // not free-form if allOf, anyOf, oneOf is not empty
+        if (schema instanceof ComposedSchema) {
+            ComposedSchema cs = (ComposedSchema) schema;
+            List<Schema> interfaces = getInterfaces(cs);
+            if (interfaces != null && !interfaces.isEmpty()) {
+                return false;
+            }
+        }
+
+        // has at least one property
+        if ("object".equals(schema.getType())) {
+            // no properties
+            if ((schema.getProperties() == null || schema.getProperties().isEmpty())) {
                 Schema addlProps = getAdditionalProperties(schema);
+                // additionalProperties not defined
                 if (addlProps == null) {
                     return true;
-                }
-
-                if (addlProps instanceof ObjectSchema) {
-                    ObjectSchema objSchema = (ObjectSchema)addlProps;
-                    if (objSchema.getProperties() == null || objSchema.getProperties().isEmpty()) {
-                        return true;
+                } else {
+                    if (addlProps instanceof ObjectSchema) {
+                        ObjectSchema objSchema = (ObjectSchema) addlProps;
+                        // additionalProperties defined as {}
+                        if (objSchema.getProperties() == null || objSchema.getProperties().isEmpty()) {
+                            return true;
+                        }
+                    } else if (addlProps instanceof Schema) {
+                        // additionalProperties defined as {}
+                        if (addlProps.getType() == null && (addlProps.getProperties() == null || addlProps.getProperties().isEmpty())) {
+                            return true;
+                        }
                     }
-                } else if (addlProps instanceof Schema && addlProps.getType() == null && (addlProps.getProperties() == null || addlProps.getProperties().isEmpty())) {
-                    return true;
                 }
             }
-
-            return false;
         }
+
+        return false;
     }
 
+    /**
+     * If a Schema contains a reference to another Schema with '$ref', returns the referenced Schema if it is found or the actual Schema in the other cases.
+     *
+     * @param openAPI specification being checked
+     * @param schema  potentially containing a '$ref'
+     * @return schema without '$ref'
+     */
     public static Schema getReferencedSchema(OpenAPI openAPI, Schema schema) {
         if (schema != null && StringUtils.isNotEmpty(schema.get$ref())) {
             String name = getSimpleRef(schema.get$ref());
@@ -507,29 +732,59 @@ public class ModelUtils {
                 return referencedSchema;
             }
         }
-
         return schema;
     }
 
     public static Schema getSchema(OpenAPI openAPI, String name) {
-        return name == null ? null : (Schema)getSchemas(openAPI).get(name);
+        if (name == null) {
+            return null;
+        }
+
+        return getSchemas(openAPI).get(name);
     }
 
+    /**
+     * Return a Map of the schemas defined under /components/schemas in the OAS document.
+     * The returned Map only includes the direct children of /components/schemas in the OAS document; the Map
+     * does not include inlined schemas.
+     *
+     * @param openAPI the OpenAPI document.
+     * @return a map of schemas in the OAS document.
+     */
     public static Map<String, Schema> getSchemas(OpenAPI openAPI) {
-        return openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getSchemas() != null ? openAPI.getComponents().getSchemas() : Collections.emptyMap();
+        if (openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getSchemas() != null) {
+            return openAPI.getComponents().getSchemas();
+        }
+        return Collections.emptyMap();
     }
 
+    /**
+     * Return the list of all schemas in the 'components/schemas' section of an openAPI specification,
+     * including inlined schemas and children of composed schemas.
+     *
+     * @param openAPI OpenAPI document
+     * @return a list of schemas
+     */
     public static List<Schema> getAllSchemas(OpenAPI openAPI) {
-        List<Schema> allSchemas = new ArrayList();
-        List<String> refSchemas = new ArrayList();
+        List<Schema> allSchemas = new ArrayList<Schema>();
+        List<String> refSchemas = new ArrayList<String>();
         getSchemas(openAPI).forEach((key, schema) -> {
-            visitSchema(openAPI, schema, (String)null, refSchemas, (s, mimetype) -> {
+            // Invoke visitSchema to recursively visit all schema objects, included inlined and composed schemas.
+            // Use the OpenAPISchemaVisitor visitor function
+            visitSchema(openAPI, schema, null, refSchemas, (s, mimetype) -> {
                 allSchemas.add(s);
             });
         });
         return allSchemas;
     }
 
+    /**
+     * If a RequestBody contains a reference to an other RequestBody with '$ref', returns the referenced RequestBody if it is found or the actual RequestBody in the other cases.
+     *
+     * @param openAPI     specification being checked
+     * @param requestBody potentially containing a '$ref'
+     * @return requestBody without '$ref'
+     */
     public static RequestBody getReferencedRequestBody(OpenAPI openAPI, RequestBody requestBody) {
         if (requestBody != null && StringUtils.isNotEmpty(requestBody.get$ref())) {
             String name = getSimpleRef(requestBody.get$ref());
@@ -538,18 +793,27 @@ public class ModelUtils {
                 return referencedRequestBody;
             }
         }
-
         return requestBody;
     }
 
     public static RequestBody getRequestBody(OpenAPI openAPI, String name) {
         if (name == null) {
             return null;
-        } else {
-            return openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getRequestBodies() != null ? (RequestBody)openAPI.getComponents().getRequestBodies().get(name) : null;
         }
+
+        if (openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getRequestBodies() != null) {
+            return openAPI.getComponents().getRequestBodies().get(name);
+        }
+        return null;
     }
 
+    /**
+     * If a ApiResponse contains a reference to an other ApiResponse with '$ref', returns the referenced ApiResponse if it is found or the actual ApiResponse in the other cases.
+     *
+     * @param openAPI     specification being checked
+     * @param apiResponse potentially containing a '$ref'
+     * @return apiResponse without '$ref'
+     */
     public static ApiResponse getReferencedApiResponse(OpenAPI openAPI, ApiResponse apiResponse) {
         if (apiResponse != null && StringUtils.isNotEmpty(apiResponse.get$ref())) {
             String name = getSimpleRef(apiResponse.get$ref());
@@ -558,18 +822,27 @@ public class ModelUtils {
                 return referencedApiResponse;
             }
         }
-
         return apiResponse;
     }
 
     public static ApiResponse getApiResponse(OpenAPI openAPI, String name) {
         if (name == null) {
             return null;
-        } else {
-            return openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getResponses() != null ? (ApiResponse)openAPI.getComponents().getResponses().get(name) : null;
         }
+
+        if (openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getResponses() != null) {
+            return openAPI.getComponents().getResponses().get(name);
+        }
+        return null;
     }
 
+    /**
+     * If a Parameter contains a reference to an other Parameter with '$ref', returns the referenced Parameter if it is found or the actual Parameter in the other cases.
+     *
+     * @param openAPI   specification being checked
+     * @param parameter potentially containing a '$ref'
+     * @return parameter without '$ref'
+     */
     public static Parameter getReferencedParameter(OpenAPI openAPI, Parameter parameter) {
         if (parameter != null && StringUtils.isNotEmpty(parameter.get$ref())) {
             String name = getSimpleRef(parameter.get$ref());
@@ -578,18 +851,27 @@ public class ModelUtils {
                 return referencedParameter;
             }
         }
-
         return parameter;
     }
 
     public static Parameter getParameter(OpenAPI openAPI, String name) {
         if (name == null) {
             return null;
-        } else {
-            return openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getParameters() != null ? (Parameter)openAPI.getComponents().getParameters().get(name) : null;
         }
+
+        if (openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getParameters() != null) {
+            return openAPI.getComponents().getParameters().get(name);
+        }
+        return null;
     }
 
+    /**
+     * If a Callback contains a reference to an other Callback with '$ref', returns the referenced Callback if it is found or the actual Callback in the other cases.
+     *
+     * @param openAPI  specification being checked
+     * @param callback potentially containing a '$ref'
+     * @return callback without '$ref'
+     */
     public static Callback getReferencedCallback(OpenAPI openAPI, Callback callback) {
         if (callback != null && StringUtils.isNotEmpty(callback.get$ref())) {
             String name = getSimpleRef(callback.get$ref());
@@ -598,88 +880,81 @@ public class ModelUtils {
                 return referencedCallback;
             }
         }
-
         return callback;
     }
 
     public static Callback getCallback(OpenAPI openAPI, String name) {
         if (name == null) {
             return null;
-        } else {
-            return openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getCallbacks() != null ? (Callback)openAPI.getComponents().getCallbacks().get(name) : null;
         }
+
+        if (openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getCallbacks() != null) {
+            return openAPI.getComponents().getCallbacks().get(name);
+        }
+        return null;
     }
 
+    /**
+     * Return the first defined Schema for a RequestBody
+     *
+     * @param requestBody request body of the operation
+     * @return firstSchema
+     */
     public static Schema getSchemaFromRequestBody(RequestBody requestBody) {
         return getSchemaFromContent(requestBody.getContent());
     }
 
+    /**
+     * Return the first defined Schema for a ApiResponse
+     *
+     * @param response api response of the operation
+     * @return firstSchema
+     */
     public static Schema getSchemaFromResponse(ApiResponse response) {
         return getSchemaFromContent(response.getContent());
     }
 
+    /**
+     * Return the first Schema from a specified OAS 'content' section.
+     *
+     * For example, given the following OAS, this method returns the schema
+     * for the 'application/json' content type because it is listed first in the OAS.
+     *
+     * responses:
+     *   '200':
+     *     content:
+     *       application/json:
+     *         schema:
+     *           $ref: '#/components/schemas/XYZ'
+     *       application/xml:
+     *          ...
+     *
+     * @param content a 'content' section in the OAS specification.
+     * @return the Schema.
+     */
     private static Schema getSchemaFromContent(Content content) {
-        if (content != null && !content.isEmpty()) {
-            Map.Entry<String, MediaType> entry = (Map.Entry)content.entrySet().iterator().next();
-            if (content.size() > 1) {
-                LOGGER.warn("Multiple schemas found in the OAS 'content' section, returning only the first one ({})", entry.getKey());
-            }
-
-            return ((MediaType)entry.getValue()).getSchema();
-        } else {
+        if (content == null || content.isEmpty()) {
             return null;
         }
-    }
-
-    public static Schema unaliasSchema(OpenAPI openAPI, Schema schema) {
-        return unaliasSchema(openAPI, schema, Collections.emptyMap());
-    }
-
-    public static Schema unaliasSchema(OpenAPI openAPI, Schema schema, Map<String, String> importMappings) {
-        Map<String, Schema> allSchemas = getSchemas(openAPI);
-        if (allSchemas != null && !allSchemas.isEmpty()) {
-            if (schema != null && StringUtils.isNotEmpty(schema.get$ref())) {
-                String simpleRef = getSimpleRef(schema.get$ref());
-                if (importMappings.containsKey(simpleRef)) {
-                    LOGGER.info("Schema unaliasing of {} omitted because aliased class is to be mapped to {}", simpleRef, importMappings.get(simpleRef));
-                    return schema;
-                } else {
-                    Schema ref = (Schema)allSchemas.get(simpleRef);
-                    if (ref == null) {
-                        //OnceLogger.once(LOGGER).warn("{} is not defined", schema.get$ref());
-                        return schema;
-                    } else if (ref.getEnum() != null && !ref.getEnum().isEmpty()) {
-                        return schema;
-                    } else if (isArraySchema(ref)) {
-                        return isGenerateAliasAsModel() ? schema : unaliasSchema(openAPI, (Schema)allSchemas.get(getSimpleRef(schema.get$ref())), importMappings);
-                    } else if (isComposedSchema(ref)) {
-                        return schema;
-                    } else if (isMapSchema(ref)) {
-                        if (ref.getProperties() != null && !ref.getProperties().isEmpty()) {
-                            return schema;
-                        } else {
-                            return isGenerateAliasAsModel() ? schema : unaliasSchema(openAPI, (Schema)allSchemas.get(getSimpleRef(schema.get$ref())), importMappings);
-                        }
-                    } else if (isObjectSchema(ref)) {
-                        return ref.getProperties() != null && !ref.getProperties().isEmpty() ? schema : unaliasSchema(openAPI, (Schema)allSchemas.get(getSimpleRef(schema.get$ref())), importMappings);
-                    } else {
-                        return unaliasSchema(openAPI, (Schema)allSchemas.get(getSimpleRef(schema.get$ref())), importMappings);
-                    }
-                }
-            } else {
-                return schema;
-            }
-        } else {
-            return schema;
+        Map.Entry<String, MediaType> entry = content.entrySet().iterator().next();
+        if (content.size() > 1) {
+            // Other content types are currently ignored by codegen. If you see this warning,
+            // reorder the OAS spec to put the desired content type first.
+            LOGGER.warn("Multiple schemas found in the OAS 'content' section, returning only the first one ({})",
+                    entry.getKey());
         }
+        return entry.getValue().getSchema();
     }
+
 
     public static Schema getAdditionalProperties(Schema schema) {
         if (schema.getAdditionalProperties() instanceof Schema) {
-            return (Schema)schema.getAdditionalProperties();
-        } else {
-            return schema.getAdditionalProperties() instanceof Boolean && (Boolean)schema.getAdditionalProperties() ? new ObjectSchema() : null;
+            return (Schema) schema.getAdditionalProperties();
         }
+        if (schema.getAdditionalProperties() instanceof Boolean && (Boolean) schema.getAdditionalProperties()) {
+            return new ObjectSchema();
+        }
+        return null;
     }
 
     public static Header getReferencedHeader(OpenAPI openAPI, Header header) {
@@ -690,115 +965,171 @@ public class ModelUtils {
                 return referencedheader;
             }
         }
-
         return header;
     }
 
     public static Header getHeader(OpenAPI openAPI, String name) {
         if (name == null) {
             return null;
-        } else {
-            return openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getHeaders() != null ? (Header)openAPI.getComponents().getHeaders().get(name) : null;
         }
+
+        if (openAPI != null && openAPI.getComponents() != null && openAPI.getComponents().getHeaders() != null) {
+            return openAPI.getComponents().getHeaders().get(name);
+        }
+        return null;
     }
 
     public static Map<String, List<String>> getChildrenMap(OpenAPI openAPI) {
         Map<String, Schema> allSchemas = getSchemas(openAPI);
-        Map<String, List<Map.Entry<String, Schema>>> groupedByParent = (Map)allSchemas.entrySet().stream().filter((entry) -> {
-            return isComposedSchema((Schema)entry.getValue());
-        }).filter((entry) -> {
-            return getParentName((ComposedSchema)entry.getValue(), allSchemas) != null;
-        }).collect(Collectors.groupingBy((entry) -> {
-            return getParentName((ComposedSchema)entry.getValue(), allSchemas);
-        }));
-        return (Map)groupedByParent.entrySet().stream().collect(Collectors.toMap((entry) -> {
-            return (String)entry.getKey();
-        }, (entry) -> {
-            return (List)((List)entry.getValue()).stream().map((e) -> {
-                return (String)entry.getKey();
-            }).collect(Collectors.toList());
-        }));
+
+        Map<String, List<Map.Entry<String, Schema>>> groupedByParent = allSchemas.entrySet().stream()
+                .filter(entry -> isComposedSchema(entry.getValue()))
+                .filter(entry -> getParentName((ComposedSchema) entry.getValue(), allSchemas)!=null)
+                .collect(Collectors.groupingBy(entry -> getParentName((ComposedSchema) entry.getValue(), allSchemas)));
+
+        return groupedByParent.entrySet().stream()
+                .collect(Collectors.toMap(entry -> entry.getKey(), entry -> entry.getValue().stream().map(e -> e.getKey()).collect(Collectors.toList())));
     }
 
+
+    /**
+     * Get the interfaces from the schema (composed)
+     *
+     * @param composed schema (alias or direct reference)
+     * @return a list of schema defined in allOf, anyOf or oneOf
+     */
     public static List<Schema> getInterfaces(ComposedSchema composed) {
         if (composed.getAllOf() != null && !composed.getAllOf().isEmpty()) {
             return composed.getAllOf();
         } else if (composed.getAnyOf() != null && !composed.getAnyOf().isEmpty()) {
             return composed.getAnyOf();
+        } else if (composed.getOneOf() != null && !composed.getOneOf().isEmpty()) {
+            return composed.getOneOf();
         } else {
-            return composed.getOneOf() != null && !composed.getOneOf().isEmpty() ? composed.getOneOf() : Collections.emptyList();
+            return Collections.<Schema>emptyList();
         }
     }
 
+    /**
+     * Get the parent model name from the composed schema (allOf, anyOf, oneOf).
+     * It traverses the OAS model (possibly resolving $ref) to determine schemas
+     * that specify a determinator.
+     * If there are multiple elements in the composed schema and it is not clear
+     * which one should be the parent, return null.
+     *
+     * For example, given the following OAS spec, the parent of 'Dog' is Animal
+     * because 'Animal' specifies a discriminator.
+     *
+     * animal:
+     *   type: object
+     *   discriminator:
+     *     propertyName: type
+     *   properties:
+     *     type: string
+     *
+     * dog:
+     *   allOf:
+     *      - $ref: '#/components/schemas/animal'
+     *      - type: object
+     *        properties:
+     *          breed: string
+     *
+     * @param composedSchema schema (alias or direct reference)
+     * @param allSchemas     all schemas
+     * @return the name of the parent model
+     */
     public static String getParentName(ComposedSchema composedSchema, Map<String, Schema> allSchemas) {
         List<Schema> interfaces = getInterfaces(composedSchema);
         int nullSchemaChildrenCount = 0;
         boolean hasAmbiguousParents = false;
-        List<String> refedWithoutDiscriminator = new ArrayList();
-        if (interfaces != null && !interfaces.isEmpty()) {
-            Iterator var6 = interfaces.iterator();
+        List<String> refedWithoutDiscriminator = new ArrayList<>();
 
-            while(var6.hasNext()) {
-                Schema schema = (Schema)var6.next();
+        if (interfaces != null && !interfaces.isEmpty()) {
+            for (Schema schema : interfaces) {
+                // get the actual schema
                 if (StringUtils.isNotEmpty(schema.get$ref())) {
                     String parentName = getSimpleRef(schema.get$ref());
-                    Schema s = (Schema)allSchemas.get(parentName);
+                    Schema s = allSchemas.get(parentName);
                     if (s == null) {
                         LOGGER.error("Failed to obtain schema from {}", parentName);
                         return "UNKNOWN_PARENT_NAME";
-                    }
-
-                    if (hasOrInheritsDiscriminator(s, allSchemas)) {
+                    } else if (hasOrInheritsDiscriminator(s, allSchemas)) {
+                        // discriminator.propertyName is used
                         return parentName;
+                    } else {
+                        // not a parent since discriminator.propertyName is not set
+                        hasAmbiguousParents = true;
+                        refedWithoutDiscriminator.add(parentName);
                     }
-
-                    hasAmbiguousParents = true;
-                    refedWithoutDiscriminator.add(parentName);
-                } else if (isNullType(schema)) {
-                    ++nullSchemaChildrenCount;
+                } else {
+                    // not a ref, doing nothing, except counting the number of times the 'null' type
+                    // is listed as composed element.
+                    if (ModelUtils.isNullType(schema)) {
+                        // If there are two interfaces, and one of them is the 'null' type,
+                        // then the parent is obvious and there is no need to warn about specifying
+                        // a determinator.
+                        nullSchemaChildrenCount++;
+                    }
                 }
             }
-
             if (refedWithoutDiscriminator.size() == 1 && nullSchemaChildrenCount == 1) {
+                // One schema is a $ref and the other is the 'null' type, so the parent is obvious.
+                // In this particular case there is no need to specify a discriminator.
                 hasAmbiguousParents = false;
             }
         }
 
+        // parent name only makes sense when there is a single obvious parent
         if (refedWithoutDiscriminator.size() == 1) {
             if (hasAmbiguousParents) {
-                LOGGER.warn("[deprecated] inheritance without use of 'discriminator.propertyName' is deprecated and will be removed in a future release. Generating model for composed schema name: {}. Title: {}", composedSchema.getName(), composedSchema.getTitle());
+                LOGGER.warn("[deprecated] inheritance without use of 'discriminator.propertyName' is deprecated " +
+                                "and will be removed in a future release. Generating model for composed schema name: {}. Title: {}",
+                        composedSchema.getName(), composedSchema.getTitle());
             }
-
-            return (String)refedWithoutDiscriminator.get(0);
-        } else {
-            return null;
+            return refedWithoutDiscriminator.get(0);
         }
+
+        return null;
     }
 
+    /**
+     * Get the list of parent model names from the schemas (allOf, anyOf, oneOf).
+     *
+     * @param composedSchema   schema (alias or direct reference)
+     * @param allSchemas       all schemas
+     * @param includeAncestors if true, include the indirect ancestors in the return value. If false, return the direct parents.
+     * @return the name of the parent model
+     */
     public static List<String> getAllParentsName(ComposedSchema composedSchema, Map<String, Schema> allSchemas, boolean includeAncestors) {
         List<Schema> interfaces = getInterfaces(composedSchema);
-        List<String> names = new ArrayList();
-        if (interfaces != null && !interfaces.isEmpty()) {
-            Iterator var5 = interfaces.iterator();
+        List<String> names = new ArrayList<String>();
 
-            while(var5.hasNext()) {
-                Schema schema = (Schema)var5.next();
+        if (interfaces != null && !interfaces.isEmpty()) {
+            for (Schema schema : interfaces) {
+                // get the actual schema
                 if (StringUtils.isNotEmpty(schema.get$ref())) {
                     String parentName = getSimpleRef(schema.get$ref());
-                    Schema s = (Schema)allSchemas.get(parentName);
+                    Schema s = allSchemas.get(parentName);
                     if (s == null) {
                         LOGGER.error("Failed to obtain schema from {}", parentName);
                         names.add("UNKNOWN_PARENT_NAME");
                     } else if (hasOrInheritsDiscriminator(s, allSchemas)) {
+                        // discriminator.propertyName is used
                         names.add(parentName);
                         if (includeAncestors && s instanceof ComposedSchema) {
-                            names.addAll(getAllParentsName((ComposedSchema)s, allSchemas, true));
+                            names.addAll(getAllParentsName((ComposedSchema) s, allSchemas, true));
                         }
+                    } else {
+                        // not a parent since discriminator.propertyName is not set
                     }
+                } else {
+                    // not a ref, doing nothing
                 }
             }
         }
 
+        // ensure `allParents` always includes `parent`
+        // this is more robust than keeping logic in getParentName() and getAllParentsName() in sync
         String parentName = getParentName(composedSchema, allSchemas);
         if (parentName != null && !names.contains(parentName)) {
             names.add(parentName);
@@ -810,68 +1141,114 @@ public class ModelUtils {
     private static boolean hasOrInheritsDiscriminator(Schema schema, Map<String, Schema> allSchemas) {
         if (schema.getDiscriminator() != null && StringUtils.isNotEmpty(schema.getDiscriminator().getPropertyName())) {
             return true;
-        } else {
-            if (StringUtils.isNotEmpty(schema.get$ref())) {
-                String parentName = getSimpleRef(schema.get$ref());
-                Schema s = (Schema)allSchemas.get(parentName);
-                if (s != null) {
-                    return hasOrInheritsDiscriminator(s, allSchemas);
-                }
-
+        }
+        else if (StringUtils.isNotEmpty(schema.get$ref())) {
+            String parentName = getSimpleRef(schema.get$ref());
+            Schema s = allSchemas.get(parentName);
+            if (s != null) {
+                return hasOrInheritsDiscriminator(s, allSchemas);
+            } else {
                 LOGGER.error("Failed to obtain schema from {}", parentName);
-            } else if (schema instanceof ComposedSchema) {
-                ComposedSchema composed = (ComposedSchema)schema;
-                List<Schema> interfaces = getInterfaces(composed);
-                Iterator var4 = interfaces.iterator();
-
-                while(var4.hasNext()) {
-                    Schema i = (Schema)var4.next();
-                    if (hasOrInheritsDiscriminator(i, allSchemas)) {
-                        return true;
-                    }
+            }
+        } else if (schema instanceof ComposedSchema) {
+            final ComposedSchema composed = (ComposedSchema) schema;
+            final List<Schema> interfaces = getInterfaces(composed);
+            for (Schema i : interfaces) {
+                if (hasOrInheritsDiscriminator(i, allSchemas)) {
+                    return true;
                 }
             }
-
-            return false;
         }
+        return false;
     }
 
+    /**
+     * Return true if the 'nullable' attribute is set to true in the schema, i.e. if the value
+     * of the property can be the null value.
+     *
+     * In addition, if the OAS document is 3.1 or above, isNullable returns true if the input
+     * schema is a 'oneOf' composed document with at most two children, and one of the children
+     * is the 'null' type.
+     *
+     * The caller is responsible for resolving schema references before invoking isNullable.
+     * If the input schema is a $ref and the referenced schema has 'nullable: true', this method
+     * returns false (because the nullable attribute is defined in the referenced schema).
+     *
+     * The 'nullable' attribute was introduced in OAS 3.0.
+     * The 'nullable' attribute is deprecated in OAS 3.1. In a OAS 3.1 document, the preferred way
+     * to specify nullable properties is to use the 'null' type.
+     *
+     * @param schema the OAS schema.
+     * @return true if the schema is nullable.
+     */
     public static boolean isNullable(Schema schema) {
         if (schema == null) {
             return false;
-        } else if (Boolean.TRUE.equals(schema.getNullable())) {
-            return true;
-        } else if (schema.getExtensions() != null && schema.getExtensions().get("x-nullable") != null) {
-            return Boolean.valueOf(schema.getExtensions().get("x-nullable").toString());
-        } else {
-            return schema instanceof ComposedSchema ? isNullableComposedSchema((ComposedSchema)schema) : false;
         }
+
+        if (Boolean.TRUE.equals(schema.getNullable())) {
+            return true;
+        }
+
+        if (schema.getExtensions() != null && schema.getExtensions().get("x-nullable") != null) {
+            return Boolean.valueOf(schema.getExtensions().get("x-nullable").toString());
+        }
+        // In OAS 3.1, the recommended way to define a nullable property or object is to use oneOf.
+        if (schema instanceof ComposedSchema) {
+            return isNullableComposedSchema(((ComposedSchema) schema));
+        }
+        return false;
     }
 
+    /**
+     * Return true if the specified composed schema is 'oneOf', contains one or two elements,
+     * and at least one of the elements is the 'null' type.
+     *
+     * The 'null' type is supported in OAS 3.1 and above.
+     * In the example below, the 'OptionalOrder' can have the null value because the 'null'
+     * type is one of the elements under 'oneOf'.
+     *
+     * OptionalOrder:
+     *   oneOf:
+     *     - type: 'null'
+     *     - $ref: '#/components/schemas/Order'
+     *
+     * @param schema the OAS composed schema.
+     * @return true if the composed schema is nullable.
+     */
     public static boolean isNullableComposedSchema(ComposedSchema schema) {
         List<Schema> oneOf = schema.getOneOf();
         if (oneOf != null && oneOf.size() <= 2) {
-            Iterator var2 = oneOf.iterator();
-
-            while(var2.hasNext()) {
-                Schema s = (Schema)var2.next();
+            for (Schema s : oneOf) {
                 if (isNullType(s)) {
                     return true;
                 }
             }
         }
-
         return false;
     }
 
+    /**
+     * isNullType returns true if the input schema is the 'null' type.
+     *
+     * The 'null' type is supported in OAS 3.1 and above. It is not supported
+     * in OAS 2.0 and OAS 3.0.x.
+     *
+     * For example, the "null" type could be used to specify that a value must
+     * either be null or a specified type:
+     *
+     * OptionalOrder:
+     *   oneOf:
+     *     - type: 'null'
+     *     - $ref: '#/components/schemas/Order'
+     *
+     * @param schema the OpenAPI schema
+     * @return true if the schema is the 'null' type
+     */
     public static boolean isNullType(Schema schema) {
-        return "null".equals(schema.getType());
-    }
-
-
-
-    @FunctionalInterface
-    private interface OpenAPISchemaVisitor {
-        void visit(Schema var1, String var2);
+        if ("null".equals(schema.getType())) {
+            return true;
+        }
+        return false;
     }
 }
