@@ -4,7 +4,7 @@
 
 2、有maven环境的话，直接在本地执行mvn package生成
 
-#### Step 2: 解压包后，运行bin目录下的启动startup.cmd文件，运行前先设置2个参数值
+#### Step 2: 解压包后，运行bin目录下的startup.cmd文件，运行前先设置2个参数值
 
 【SWAGGER_LOCATION】参数：指定swagger的源，可以是本地文件，或者线上的swagger地址。
 
