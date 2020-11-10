@@ -1,32 +1,33 @@
-一、工具优势
+#### Step 1: 获取工具包
 
-1. 只要具备JDK环境
-2. 知道swagger地址或者swagger文件
-
-就可以一键式生成服务的所有接口测试脚本。
-
-
-二、获取工具包
-
-1、直接到 https://github.com/liuyunlong1229/swagger2jmx-plugin/releases 下载
+1、直接到 [latest stable release](https://github.com/liuyunlong1229/swagger2jmx-plugin/releases).下载
 
 2、有maven环境的话，直接在本地执行mvn package生成
 
-三、解压包后，运行bin目录下的启动startup.cmd文件，运行前先设置2个参数值
+#### Step 2: 解压包后，运行bin目录下的启动startup.cmd文件，运行前先设置2个参数值
 
 【SWAGGER_LOCATION】参数：指定swagger的源，可以是本地文件，或者线上的swagger地址。
 
-方式一：线上swagger：
+* **方式一：线上swagger** 
+
+```sh
 SWAGGER_LOCATION=http://localhost:18083/v2/api-docs
 
-方式二：本地swagger的文件，也就是上面的线上显示的整个大的json内容保存到本地一个文件中。
+``` 
+
+* **方式二：本地swagger的文件，也就是上面的线上显示的整个大的json内容保存到本地一个文件中**。
+
+```sh
 SWAGGER_LOCATION=D:/swagger.json
 
+``` 
 
-【JMX_FILE_DIR】参数：指定生成jmeter脚本auto_test.jmx生成的位置
+【JMX_FILE_DIR】参数：指定生成jmeter脚本`auto_test.jmx`生成的位置
 例如保存到D:/jmeter目录下，可以这么设置
 
+```sh
 JMX_FILE_DIR=D:/jmeter/
 
-四、效果：
+``` 
+#### 效果
 ![Image text](https://images.gitee.com/uploads/images/2020/1107/211059_003c5955_1615225.png)
