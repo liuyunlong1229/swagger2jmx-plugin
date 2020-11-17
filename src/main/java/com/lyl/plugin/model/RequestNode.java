@@ -50,6 +50,12 @@ public class RequestNode {
      */
     private String requestBody =null;
 
+
+    /**
+     * 接口排序号
+     */
+    private int sortNo;
+
     public String getHttpMethod() {
         return httpMethod;
     }
@@ -115,5 +121,13 @@ public class RequestNode {
 
     public void setOperationId(String operationId) {
         this.operationId = operationId;
+    }
+
+    public int getSortNo() {
+        return sortNo;
+    }
+
+    public void setSortNo(int sortNo) {
+        this.sortNo = sortNo;
     }
 }

@@ -134,6 +134,7 @@ public class MyDefaultGenerator {
             }
         }
 
+
         templateParamVO.setCustomVariableList(customVariableList);
 
 
@@ -142,6 +143,9 @@ public class MyDefaultGenerator {
             if (tagNodeEntry.getValue().getRequestNodes().isEmpty()) {
                 continue;
             }
+            tagNodeEntry.getValue().getRequestNodes().sort((n1,n2)->{
+                return n1.getSortNo()-n2.getSortNo();
+            });
             templateParamVO.getTagList().add(tagNodeEntry.getValue());
         }
 
@@ -206,7 +210,7 @@ public class MyDefaultGenerator {
 
         requestNode.setTag(operation.getTags());
         if(StringUtils.isNotBlank(operation.getSummary())){
-           String summary= operation.getSummary().replaceAll("&","&amp;");
+            String summary= operation.getSummary().replaceAll("&","&amp;");
             requestNode.setOperationName(summary);
         }else{
             requestNode.setOperationName(operation.getOperationId());
@@ -214,6 +218,10 @@ public class MyDefaultGenerator {
         requestNode.setOperationId(operation.getOperationId());
         List<ParamNode> queryParamNodes = new ArrayList<>();
         List<ParamNode> headerParamNodes = new ArrayList<>();
+
+        //获取接口排序号
+        int sortNo=Optional.ofNullable(operation.getExtensions()).map(ext->(LinkedHashMap)ext.get("x-ext")).map(e->(String)e.get("sortNo")).map(s->Integer.valueOf(s)).orElse(0);
+        requestNode.setSortNo(sortNo);
 
 
         boolean requestBodyIsEmpty=true;
@@ -253,7 +261,8 @@ public class MyDefaultGenerator {
                         if(requestBodyIsEmpty){
                             paramNode.setParamName(param.getName());
                             paramNode.setParamValue("${"+variableName+"}");
-                            customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
+                            String defaultValue=param.getSchema().getDefault()==null?null:param.getSchema().getDefault().toString();
+                            customVariableList.add(new VariableNode(variableName,defaultValue,param.getDescription()));
                             queryParamNodes.add(paramNode);
                         }else{
                             if(isFirstParam){
@@ -273,16 +282,17 @@ public class MyDefaultGenerator {
                         //路径参数没法在jmeter里面设置参数列表
                         String exp="{"+param.getName()+"}";
                         String target="${"+variableName+"}";
-
+                        String defaultValue=param.getSchema().getDefault()==null?null:param.getSchema().getDefault().toString();
                         requestNode.setRequestUrl(requestNode.getRequestUrl().replace(exp,target));
-                        customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
+                        customVariableList.add(new VariableNode(variableName,defaultValue,param.getDescription()));
                     } else if ("body".equalsIgnoreCase(param.getIn())) {
                         LOGGER.info("生成的body参数");
                     } else if ((param instanceof HeaderParameter) || "header".equalsIgnoreCase(param.getIn())) {
                         paramNode.setParamName(param.getName());
                         paramNode.setParamValue("${"+variableName+"}");
                         headerParamNodes.add(paramNode);
-                        customVariableList.add(new VariableNode(variableName,null,param.getDescription()));
+                        String defaultValue=param.getSchema().getDefault()==null?null:param.getSchema().getDefault().toString();
+                        customVariableList.add(new VariableNode(variableName,defaultValue,param.getDescription()));
                     }
                 }
 
