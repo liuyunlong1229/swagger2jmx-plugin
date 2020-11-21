@@ -1,3 +1,15 @@
+
+#### V1.1 新增功能介绍
+
+1、支持通过初始参数值默认生成
+生成jmeter脚本会根据参数的默认值（即取@ApiImplicitParam的defaultValue和@ApiModelProperty的example的值）生成。
+
+2、支持测试用例生成的顺序
+@ApiOperation维护扩展属性{@Extension(name="ext",properties = @ExtensionProperty(name = "sortNo", value = "1"))})，指定sortNo的值，值越小，生成测试用例越靠前。
+
+***
+
+
 #### Step 1: 获取工具包
 
 1、直接到 [latest stable release](https://github.com/liuyunlong1229/swagger2jmx-plugin/releases).下载
